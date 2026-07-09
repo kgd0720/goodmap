@@ -1,23 +1,23 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { 
-  ArrowRight, 
-  Sparkles, 
-  Lock, 
-  Search, 
-  Filter, 
-  Download, 
-  CheckCircle2, 
+import {
+  ArrowRight,
+  Sparkles,
+  Lock,
+  Search,
+  Filter,
+  Download,
+  CheckCircle2,
   AlertCircle,
   AlertTriangle,
-  Clock, 
-  Calendar, 
-  User, 
-  Phone, 
-  MapPin, 
-  RefreshCw, 
-  LayoutDashboard, 
-  FileSpreadsheet, 
+  Clock,
+  Calendar,
+  User,
+  Phone,
+  MapPin,
+  RefreshCw,
+  LayoutDashboard,
+  FileSpreadsheet,
   ArrowLeft,
   ChevronRight,
   TrendingUp,
@@ -36,12 +36,17 @@ import {
   X,
   Upload,
   Edit2,
+  Save,
+  Image as ImageIcon,
+  MessageSquare,
   RotateCcw,
   Eye,
-  MessageSquare,
   Play,
   ExternalLink
 } from "lucide-react";
+import * as pdfjsLib from "pdfjs-dist";
+// @ts-ignore
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import * as XLSX from "xlsx";
 import {
   Radar,
@@ -63,11 +68,11 @@ import {
 } from "recharts";
 import { Applicant, Question } from "./types";
 import LeadQualityTrendChart from "./components/LeadQualityTrendChart";
-import { 
-  NEW_FRANCHISE_QUESTIONS, 
-  BRAND_SWITCH_QUESTIONS, 
-  COMPETENCY_GRADES, 
-  LEAD_GRADES 
+import {
+  NEW_FRANCHISE_QUESTIONS,
+  BRAND_SWITCH_QUESTIONS,
+  COMPETENCY_GRADES,
+  LEAD_GRADES
 } from "./data/questionsData";
 import { calculateAnalysis, getQuestionFeedback, generateCounselorOpinion, getFullStatusHistory, isStagnated } from "./utils/analysis";
 import HubView from "./components/HubView";
@@ -76,10 +81,6 @@ import ScheduleView from "./components/ScheduleView";
 import TimetableBuilder from "./components/TimetableBuilder";
 import OpeningMapResult from "./components/OpeningMapResult";
 import { BudgetSimulator } from "./components/BudgetSimulator";
-import * as pdfjsLib from 'pdfjs-dist';
-
-// pdfjs-dist worker config
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
 
 // Helper functions for safe typed dictionary lookups in TSX templates
@@ -125,13 +126,13 @@ const calculateKoreanAge = (birthStr: string): number | null => {
   if (parts.length < 2) return null;
   const birthYear = parseInt(parts[0], 10);
   const birthMonth = parseInt(parts[1], 10);
-  
+
   if (isNaN(birthYear) || isNaN(birthMonth)) return null;
-  
+
   const today = new Date();
   const currentYear = today.getFullYear();
   const currentMonth = today.getMonth() + 1;
-  
+
   let age = currentYear - birthYear;
   if (currentMonth < birthMonth) {
     age--;
@@ -155,7 +156,7 @@ const formatAppliedAt = (dateStr?: string): string => {
 const getMajorRegion = (regionStr: string): string => {
   if (!regionStr || regionStr.trim() === "" || regionStr.includes("미정")) return "미정/기타";
   const trimmed = regionStr.trim();
-  
+
   if (trimmed.startsWith("서울")) return "서울";
   if (trimmed.startsWith("경기")) return "경기/인천";
   if (trimmed.startsWith("인천")) return "경기/인천";
@@ -173,10 +174,10 @@ const getMajorRegion = (regionStr: string): string => {
   if (trimmed.startsWith("충북")) return "대전/세종/충청";
   if (trimmed.startsWith("강원")) return "강원";
   if (trimmed.startsWith("제주")) return "제주";
-  
+
   const firstWord = trimmed.split(" ")[0];
   if (firstWord.length <= 4) return firstWord;
-  
+
   return "미정/기타";
 };
 
@@ -186,16 +187,50 @@ const getCustomItemTitle = (label: string, score: number, isStr: boolean): strin
   return "검토필요";
 };
 
+// Configure PDF.js worker
+if (typeof window !== "undefined" && "pdfjsLib" in window === false) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+}
+
+const generatePdfThumbnail = async (pdfUrl: string): Promise<string | null> => {
+  try {
+    const loadingTask = pdfjsLib.getDocument({ url: pdfUrl });
+    const pdf = await loadingTask.promise;
+    const page = await pdf.getPage(1);
+
+    const scale = 0.5; // low res for thumbnail
+    const viewport = page.getViewport({ scale });
+
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+
+    const renderContext: any = {
+      canvasContext: context,
+      viewport: viewport
+    };
+
+    await page.render(renderContext).promise;
+    return canvas.toDataURL("image/jpeg", 0.7);
+  } catch (error) {
+    console.error("Failed to generate PDF thumbnail:", error);
+    return null;
+  }
+};
+
 export default function App() {
   const [view, setView] = useState<"hub" | "brand" | "home" | "step1" | "step2" | "quiz" | "result" | "admin" | "schedule" | "timetable">("hub");
-  
+
   // BRAND TAB State
   const [brandTab, setBrandTab] = useState<"brochure" | "video">("brochure");
   const [brochurePage, setBrochurePage] = useState<number>(0);
   const [activeVideoIndex, setActiveVideoIndex] = useState<number>(0);
   const [videoPlaying, setVideoPlaying] = useState<boolean>(false);
   const [videoProgress, setVideoProgress] = useState<number>(0);
-  
+
   // SCHEDULE State
   const [schedulePassword, setSchedulePassword] = useState<string>("");
   const [isScheduleUnlocked, setIsScheduleUnlocked] = useState<boolean>(false);
@@ -283,7 +318,7 @@ export default function App() {
   const [loading, setLoading] = useState<boolean>(false);
   const [newQuestions, setNewQuestions] = useState<Question[]>(NEW_FRANCHISE_QUESTIONS);
   const [brandQuestions, setNewBrandQuestions] = useState<Question[]>(BRAND_SWITCH_QUESTIONS);
-  
+
   // STEP 1 State: Verification Code
   const [verificationCode, setVerificationCode] = useState<string>("");
   const [counselorMatched, setCounselorMatched] = useState<string | null>(null);
@@ -509,41 +544,41 @@ export default function App() {
 
   const getCategoryActionTags = (category: string, score: number) => {
     const norm = (category === "원장경험" || category === "원장 경영" || category === "원장 경력") ? "원장경험" :
-                 (category === "강사경험" || category === "영어 교수") ? "강사경험" :
-                 (category === "재정성" || category === "투자 가용" || category === "자본 준비") ? "재정성" :
-                 (category === "지역분석" || category === "운영 형태" || category === "상담 역량") ? "지역분석" :
-                 (category === "학부모소득" || category === "원내 공간" || category === "학사 행정") ? "학부모소득" :
-                 "회의역량";
+      (category === "강사경험" || category === "영어 교수") ? "강사경험" :
+        (category === "재정성" || category === "투자 가용" || category === "자본 준비") ? "재정성" :
+          (category === "지역분석" || category === "운영 형태" || category === "상담 역량") ? "지역분석" :
+            (category === "학부모소득" || category === "원내 공간" || category === "학사 행정") ? "학부모소득" :
+              "회의역량";
 
     if (norm === "원장경험") {
-      return score >= 4 ? ["경영 최고 경쟁력 활용", "프리미엄 학사 세무 세팅"] : 
-             score === 3 ? ["본사 임원 회계 단기 연수", "행정 매뉴얼 정독 권장"] : 
-             ["본사 신임 원장 경영 필수 이수", "현장 가상 행정 시뮬레이션 참가"];
+      return score >= 4 ? ["경영 최고 경쟁력 활용", "프리미엄 학사 세무 세팅"] :
+        score === 3 ? ["본사 임원 회계 단기 연수", "행정 매뉴얼 정독 권장"] :
+          ["본사 신임 원장 경영 필수 이수", "현장 가상 행정 시뮬레이션 참가"];
     }
     if (norm === "강사경험") {
       return score >= 4 ? ["차별화 직강 홍보 극대화", "자체 티칭 노하우 세부 전수"] :
-             score === 3 ? ["티칭 클리닉 3회 참관", "교수법 모의 피드백 검토"] :
-             ["오프닝맵 티칭 인큐베이팅 필수 신청", "본사 인증 전임 강사 우선 배정"];
+        score === 3 ? ["티칭 클리닉 3회 참관", "교수법 모의 피드백 검토"] :
+          ["오프닝맵 티칭 인큐베이팅 필수 신청", "본사 인증 전임 강사 우선 배정"];
     }
     if (norm === "재정성") {
       return score >= 4 ? ["공격적 마케팅 툴 조기 도입", "프리미엄 인테리어 구성"] :
-             score === 3 ? ["예비 가용 예비비 소폭 조정", "임차 보증금 일부 조율"] :
-             ["인테리어 협정 렌탈 론 활용", "교습소형 저지출 특화 개설안 연계"];
+        score === 3 ? ["예비 가용 예비비 소폭 조정", "임차 보증금 일부 조율"] :
+          ["인테리어 협정 렌탈 론 활용", "교습소형 저지출 특화 개설안 연계"];
     }
     if (norm === "지역분석") {
       return score >= 4 ? ["로컬 대인 설명회 선제 추진", "인근 초교 3곳 연중 타겟팅"] :
-             score === 3 ? ["현장 아파트 상권 정밀 실사", "본사 상업지 홍보기 배포"] :
-             ["컨설턴트 동반 상권 실사 세션", "본사 신학기 설명회 무상 접수"];
+        score === 3 ? ["현장 아파트 상권 정밀 실사", "본사 상업지 홍보기 배포"] :
+          ["컨설턴트 동반 상권 실사 세션", "본사 신학기 설명회 무상 접수"];
     }
     if (norm === "학부모소득") {
       return score >= 4 ? ["스피킹 고급 단과반 우선 구성", "프리미엄 교육비 수가 산정"] :
-             score === 3 ? ["학부모 가계 지시 분포 수렴", "수강 구성 가성비 배점 보완"] :
-             ["안심 교육비 한도 조정안 협의", "학부모 초빙 지원 프로모션 배부"];
+        score === 3 ? ["학부모 가계 지시 분포 수렴", "수강 구성 가성비 배점 보완"] :
+          ["안심 교육비 한도 조정안 협의", "학부모 초빙 지원 프로모션 배부"];
     }
     // 회의역량
     return score >= 4 ? ["성과급 연동 강사풀 구축", "스탭 조직 관리 매뉴얼 배점"] :
-           score === 3 ? ["기획 타임테이블 구성 연수", "인력 수급 매칭 가이드라인"] :
-           ["파트타임 강사 통솔 단기 훈력", "본사 수강 시간표 무상 템플릿 참조"];
+      score === 3 ? ["기획 타임테이블 구성 연수", "인력 수급 매칭 가이드라인"] :
+        ["파트타임 강사 통솔 단기 훈력", "본사 수강 시간표 무상 템플릿 참조"];
   };
 
   // ADMIN state
@@ -561,6 +596,9 @@ export default function App() {
 
   // Brand Configuration Manager Form States
   const [adminBrochures, setAdminBrochures] = useState<any[]>([]);
+  const [editingBrochureId, setEditingBrochureId] = useState<string | null>(null);
+  const [editBrochureData, setEditBrochureData] = useState<{ title: string, description: string, allowDownload: boolean }>({ title: "", description: "", allowDownload: true });
+
   const [adminVideos, setAdminVideos] = useState<any[]>([]);
   const [adminPreviewVideo, setAdminPreviewVideo] = useState<any | null>(null);
 
@@ -613,7 +651,7 @@ export default function App() {
       });
     });
   };
-  
+
   const [brochureTitle, setBrochureTitle] = useState<string>("");
   const [brochureDesc, setBrochureDesc] = useState<string>("");
   const [brochureAllowDownload, setBrochureAllowDownload] = useState<boolean>(true);
@@ -621,7 +659,7 @@ export default function App() {
   const [draggedFileIndex, setDraggedFileIndex] = useState<number | null>(null);
   const [dragOverFileIndex, setDragOverFileIndex] = useState<number | null>(null);
   const [brochureDirectUrl, setBrochureDirectUrl] = useState<string>("");
-  const [isProcessingPdf, setIsProcessingPdf] = useState<boolean>(false);
+
   const [brochureUploading, setBrochureUploading] = useState<boolean>(false);
   const [isDraggingBrochure, setIsDraggingBrochure] = useState<boolean>(false);
   const brochureInputRef = useRef<HTMLInputElement>(null);
@@ -646,45 +684,14 @@ export default function App() {
       addToast(`200MB를 초과하는 파일은 등록할 수 없습니다. (${oversized.name})`, "error");
       return;
     }
-    
+
     if (files.length === 1 && files[0].name.toLowerCase().endsWith('.pdf')) {
-      setIsProcessingPdf(true);
-      addToast("PDF 파일을 플립북 이미지로 자동 변환 중입니다...", "info");
-      try {
-        const pdfFile = files[0];
-        const arrayBuffer = await pdfFile.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        
-        const imageFiles: File[] = [];
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const viewport = page.getViewport({ scale: 2.0 }); // High quality render
-          const canvas = document.createElement("canvas");
-          const context = canvas.getContext("2d");
-          if (context) {
-            canvas.height = viewport.height;
-            canvas.width = viewport.width;
-            // @ts-ignore - pdfjs-dist types mismatch
-            await page.render({ canvasContext: context, viewport }).promise;
-            const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
-            if (blob) {
-              const fileName = `${pdfFile.name.replace(/\.[^/.]+$/, "")}_page${i}.jpg`;
-              imageFiles.push(new File([blob], fileName, { type: 'image/jpeg' }));
-            }
-          }
-        }
-        setBrochureFiles(imageFiles);
-        setBrochureDirectUrl("");
-        if (!brochureTitle.trim()) {
-          setBrochureTitle(pdfFile.name.replace(/\.[^/.]+$/, ""));
-        }
-        addToast(`PDF 자동 변환 완료! 총 ${imageFiles.length}장의 이미지가 첨부되었습니다.`, "success");
-      } catch (e) {
-        console.error("PDF Parsing Error:", e);
-        addToast("PDF 변환 중 오류가 발생했습니다. 올바른 파일인지 확인해주세요.", "error");
-      } finally {
-        setIsProcessingPdf(false);
+      setBrochureFiles(files);
+      setBrochureDirectUrl("");
+      if (!brochureTitle.trim()) {
+        setBrochureTitle(files[0].name.replace(/\.[^/.]+$/, ""));
       }
+      addToast(`PDF 파일이 첨부되었습니다.`, "success");
     } else {
       // Normal images
       setBrochureFiles(files);
@@ -904,8 +911,8 @@ export default function App() {
     const franchiseType = (franchiseTypeRaw === "브랜드전환" || franchiseTypeRaw === "브랜드 전환") ? "브랜드 전환" : "신규 창업";
     const matched = optionComments.find(
       c => (c.franchiseType === franchiseType || (franchiseType === "브랜드 전환" && (c.franchiseType === "브랜드전환" || c.franchiseType === "브랜드 전환"))) &&
-           c.questionIndex === questionIndex &&
-           c.score === score
+        c.questionIndex === questionIndex &&
+        c.score === score
     );
     if (matched) {
       return {
@@ -987,12 +994,12 @@ export default function App() {
   const handleTriggerPdfDownloadDirectly = async () => {
     if (!diagnosisResult) return;
     setIsGeneratingPdf(true);
-    
+
     // Give state/DOM time to render the off-screen element
     setTimeout(async () => {
       // Backup original getComputedStyle to safely intercept oklch color parsing errors in html2canvas
       const originalGetComputedStyle = window.getComputedStyle;
-      
+
       try {
         const element = document.getElementById("printable_report_wrapper");
         if (!element) {
@@ -1003,9 +1010,9 @@ export default function App() {
           margin: [10, 10, 10, 10],
           filename: `OpeningMap_개원진단보고서_${diagnosisResult.name}원장님.pdf`,
           image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { 
-            scale: 2, 
-            useCORS: true, 
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
             logging: false,
             letterRendering: true,
             scrollX: 0,
@@ -1037,7 +1044,7 @@ export default function App() {
           } catch (e) {
             // ignore
           }
-          
+
           // Regex fallback parsing for oklch or oklab colors
           const targetFunc = hasOklch ? 'oklch' : 'oklab';
           const rx = new RegExp(`${targetFunc}\\(\\s*([\\d.]+)`);
@@ -1064,7 +1071,7 @@ export default function App() {
                   return val;
                 };
               }
-              
+
               const value = Reflect.get(target, prop);
               if (typeof value === 'string' && (value.includes('oklch') || value.includes('oklab'))) {
                 return resolveColorStyle(value);
@@ -1101,19 +1108,19 @@ export default function App() {
         }
       } catch (error) {
         console.error("PDF generation via library failed. Falling back to native print:", error);
-        
+
         // Show fallback print optimizations
         const wrapper = document.getElementById("printable_report_wrapper");
         if (wrapper) {
           wrapper.classList.remove("hidden");
           wrapper.classList.add("print-active-fallback");
         }
-        
+
         // Let state flush then print the focused window element
         setTimeout(() => {
           window.focus();
           window.print();
-          
+
           if (wrapper) {
             wrapper.classList.remove("print-active-fallback");
             wrapper.classList.add("hidden");
@@ -1225,7 +1232,7 @@ export default function App() {
               {/* [중간 1부] 다차원 역량 분석 육각형 결과 */}
               <div className="mb-6 text-left">
                 <h3 className="text-xs font-black text-[#0B3B24] border-b pb-1 mb-3">2. 다차원 역량 분석 육각형 진단 지표 (Competency Hexagon Charts)</h3>
-                
+
                 <div className="grid grid-cols-12 gap-4 border border-slate-200 p-4 bg-slate-50/40 rounded-lg print-avoid-break items-center">
                   {/* Printable Radar Chart */}
                   <div className="col-span-12 md:col-span-5 h-[180px] flex items-center justify-center bg-white rounded-lg border border-slate-100 p-1">
@@ -1240,13 +1247,13 @@ export default function App() {
                         }))
                       }>
                         <PolarGrid stroke="#CBD5E1" />
-                        <PolarAngleAxis 
-                          dataKey="subject" 
+                        <PolarAngleAxis
+                          dataKey="subject"
                           tick={{ fill: '#334155', fontSize: 7, fontWeight: 820 }}
                         />
-                        <PolarRadiusAxis 
-                          angle={30} 
-                          domain={[0, 5]} 
+                        <PolarRadiusAxis
+                          angle={30}
+                          domain={[0, 5]}
                           tick={{ fill: '#94A3B8', fontSize: 7 }}
                           tickCount={6}
                         />
@@ -1289,7 +1296,7 @@ export default function App() {
               {diagnosisResultAnalysis && (
                 <div className="mb-6 space-y-4 text-left">
                   <h3 className="text-xs font-black text-[#0B3B24] border-b pb-1 mb-2">3. 고려대 파트너 연계 추천 상권 및 가이드라인 (Opening Map Solutions)</h3>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="border border-slate-300 rounded-lg p-3.5 bg-slate-50/50 print-avoid-break">
                       <h5 className="text-[11px] font-extrabold text-[#0B3B24] border-b pb-1 mb-2">✓ 추천 학원 상권 입지 구역</h5>
@@ -1347,7 +1354,7 @@ export default function App() {
               <p className="text-xs text-slate-650 leading-relaxed max-w-lg mx-auto font-bold text-center">
                 본 서류 심사가 완결됨에 따라 본사 매칭 전임 담당관(<b>{diagnosisResult.counselorName}</b>)이 원장님 연락처로 직접 신속히 전화를 드리고 상세 개설 심사 통보 유선 상담 및 입지 로드맵 브리핑을 지원해 드립니다.
               </p>
-              
+
               {/* Official Stamp Box for high fidelity */}
               <div className="pt-6 flex justify-center items-center gap-12 select-none">
                 <div className="text-left font-sans">
@@ -1385,7 +1392,7 @@ export default function App() {
             {/* [중간 3부] 보완사항 (Detail questions loop) */}
             <div className="mb-6 space-y-3.5 text-left">
               <h3 className="text-xs font-black text-[#0B3B24] border-b pb-1 mb-2">4. 자가진단 문항별 세부 보완 및 처방 솔루션 (Prescription Details)</h3>
-              
+
               <div className="space-y-3">
                 {(diagnosisResult.franchiseType === "신규 창업" ? newQuestions : brandQuestions).map((q, idx) => {
                   const score = diagnosisResult.answers[idx] || 3;
@@ -1400,18 +1407,18 @@ export default function App() {
                         </span>
                         <div className="w-full text-[10.5px] text-left">
                           <h4 className="font-extrabold text-slate-800 leading-tight text-left">{q.text}</h4>
-                          
+
                           <div className="grid grid-cols-12 gap-2 mt-1.5 pt-1.5 border-t border-slate-200/50 text-[10px]">
                             <div className="col-span-4 bg-slate-50 px-2 py-1 rounded text-left">
                               <span className="text-[8px] text-slate-400 block font-bold">나의 답변</span>
                               <span className="text-slate-700 font-bold block truncate">{selectedOptionText}</span>
                             </div>
-                            
+
                             <div className="col-span-2 bg-slate-50 px-2 py-1 rounded text-center">
                               <span className="text-[8px] text-slate-400 block font-bold">평가수준</span>
                               <span className="text-[#C5A059] font-black block">{feedback.scoreText} ({score}점)</span>
                             </div>
-                            
+
                             <div className="col-span-6 bg-slate-50 px-2 py-1 rounded text-left">
                               <span className="text-[8px] text-[#C5A059] font-extrabold block">본사 개원 보완 권고사항</span>
                               <p className="text-slate-600 font-semibold leading-normal mt-0.5 text-[9.5px]">
@@ -1546,8 +1553,8 @@ export default function App() {
   };
 
   // Switch questions array based on selection
-  const activeQuestionsList = basicInfo.franchiseType === "신규 창업" 
-    ? newQuestions 
+  const activeQuestionsList = basicInfo.franchiseType === "신규 창업"
+    ? newQuestions
     : brandQuestions;
 
   // Handle single question raw selection
@@ -1561,7 +1568,7 @@ export default function App() {
   const handleSubmitDiagnosis = async () => {
     setAiReportLoading(true);
     setView("result"); // Load result view but show loading spinner where appropriate
-    
+
     const payload = {
       ...basicInfo,
       verificationCode: verificationCode || "1004",
@@ -1816,12 +1823,12 @@ export default function App() {
 
   // Filtering applicant list
   const filteredApplicants = applicants.filter(app => {
-    const matchesSearch = 
+    const matchesSearch =
       app.name.toLowerCase().includes(adminSearch.toLowerCase()) ||
       app.phone.includes(adminSearch) ||
       app.region.toLowerCase().includes(adminSearch.toLowerCase()) ||
       (app.counselorName && app.counselorName.toLowerCase().includes(adminSearch.toLowerCase()));
-      
+
     const matchesFranchise = adminFilterFranchise === "All" || app.franchiseType === adminFilterFranchise;
     const matchesCompetency = adminFilterCompetency === "All" || app.competencyRank === adminFilterCompetency;
     const matchesLead = adminFilterLead === "All" || app.leadRank === adminFilterLead;
@@ -1838,11 +1845,11 @@ export default function App() {
     const todayDate = new Date("2026-06-13").toDateString(); // Fixed current metadata clock anchor
     return appDate === todayDate;
   }).length;
-  
+
   const newStartupCount = applicants.filter(app => app.franchiseType === "신규 창업").length;
   const brandSwitchCount = applicants.filter(app => app.franchiseType === "브랜드 전환").length;
   const sLeadCount = applicants.filter(app => app.leadRank === "S").length;
-  
+
   const completedContractCount = applicants.filter(app => app.counselorStatus === "계약완료").length;
   const draftPercent = totalCount > 0 ? Math.round((completedContractCount / totalCount) * 100) : 0;
 
@@ -1891,7 +1898,7 @@ export default function App() {
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "창업 신청자 DB");
-    
+
     // Set column widths elegantly
     worksheet["!cols"] = [
       { wch: 6 },  // 번호
@@ -1930,13 +1937,13 @@ export default function App() {
       { wch: 60 }, // 본사의견
     ];
 
-    XLSX.writeFile(workbook, `오프닝맵_영어학원_창업진단_데이터베이스_${new Date().toISOString().slice(0,10)}.xlsx`);
+    XLSX.writeFile(workbook, `오프닝맵_영어학원_창업진단_데이터베이스_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   // Download Dinagostic Questions to Excel format
   const handleDownloadQuestionsXlsx = () => {
     const exportData: any[] = [];
-    
+
     // Add New Franchise questions
     newQuestions.forEach((q, qIndex) => {
       q.options.forEach((opt) => {
@@ -1982,7 +1989,7 @@ export default function App() {
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "진단문항 설정");
-    
+
     worksheet["!cols"] = [
       { wch: 15 }, // 가맹유형
       { wch: 10 }, // 문항순서
@@ -1992,7 +1999,7 @@ export default function App() {
       { wch: 70 }, // 처방코멘트
     ];
 
-    XLSX.writeFile(workbook, `오프닝맵_진단문항_설정_${new Date().toISOString().slice(0,10)}.xlsx`);
+    XLSX.writeFile(workbook, `오프닝맵_진단문항_설정_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   // Upload/Register Diagnostic Questions from Excel format
@@ -2156,7 +2163,7 @@ export default function App() {
         console.error("Failed to load comments before export:", err);
       }
     }
-    
+
     const exportData = currentComments.map((c) => ({
       "가맹유형": c.franchiseType,
       "문항순서": c.questionIndex + 1,
@@ -2179,7 +2186,7 @@ export default function App() {
       { wch: 70 }, // 처방코멘트
     ];
 
-    XLSX.writeFile(workbook, `오프닝맵_선택처방_코멘트설정_${new Date().toISOString().slice(0,10)}.xlsx`);
+    XLSX.writeFile(workbook, `오프닝맵_선택처방_코멘트설정_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   // Upload/Register Option comments from Excel format
@@ -2209,7 +2216,7 @@ export default function App() {
         }
 
         const matchedComments: any[] = [];
-        
+
         rawJson.forEach((row: any) => {
           let franchiseTypeRaw = (row["가맹유형"] || "").toString().trim();
           let franchiseType = "";
@@ -2597,14 +2604,14 @@ export default function App() {
       // If they selected local files, let's upload them
       if (brochureFiles.length > 0) {
         setBrochureUploadFeedback({ status: "uploading", message: `파일(${brochureFiles.length}개)을 서버로 전송 중...` });
-        
+
         const uploadedUrls: string[] = [];
-        
+
         for (let i = 0; i < brochureFiles.length; i++) {
           const file = brochureFiles[i];
           let uploadSuccess = false;
           let uploadData: any = null;
-          
+
           try {
             const formData = new FormData();
             formData.append("file", file);
@@ -2613,7 +2620,7 @@ export default function App() {
               method: "POST",
               body: formData,
             });
-            
+
             if (uploadRes.ok) {
               uploadData = await uploadRes.json();
               if (uploadData.success) {
@@ -2652,22 +2659,22 @@ export default function App() {
               console.error("Base64 upload failed", fallbackErr);
             }
           }
-          
+
           if (uploadSuccess && uploadData) {
             uploadedUrls.push(uploadData.url);
           } else {
-             throw new Error(`'${file.name}' 업로드 실패`);
+            throw new Error(`'${file.name}' 업로드 실패`);
           }
         }
 
         finalUrls = uploadedUrls;
         isPdf = brochureFiles.length === 1 && brochureFiles[0].name.toLowerCase().endsWith(".pdf");
         filename = brochureFiles[0].name;
-        
+
         setBrochureUploadFeedback({ status: "success", message: "서버 파일 업로드 완료!" });
         addToast("가맹 브로슈어 파일이 서버에 완벽히 업로드되었습니다!", "success");
       } else {
-         isPdf = finalUrls[0]?.toLowerCase().endsWith(".pdf") || false;
+        isPdf = finalUrls[0]?.toLowerCase().endsWith(".pdf") || false;
       }
 
       if (finalUrls.length === 0) {
@@ -2675,6 +2682,17 @@ export default function App() {
         setBrochureUploading(false);
         setBrochureUploadFeedback({ status: "idle" });
         return;
+      }
+
+      // Generate thumbnail if PDF
+      let thumbnailUrl = "";
+      if (isPdf && finalUrls[0]) {
+        try {
+          const thumb = await generatePdfThumbnail(finalUrls[0]);
+          if (thumb) thumbnailUrl = thumb;
+        } catch (e) {
+          console.warn("Could not generate thumbnail", e);
+        }
       }
 
       // Create brochure object
@@ -2687,6 +2705,7 @@ export default function App() {
         urls: finalUrls,
         type: isPdf ? 'pdf' : 'images',
         allowDownload: brochureAllowDownload,
+        thumbnailUrl: thumbnailUrl,
         uploadedAt: new Date().toISOString()
       };
 
@@ -2727,6 +2746,41 @@ export default function App() {
     }
   };
 
+  // Handle editing a brochure
+  const handleSaveBrochureEdit = async (id: string) => {
+    if (!editBrochureData.title.trim()) {
+      await safeAlert("브로슈어 제목을 입력해주세요.", "입력 오류");
+      return;
+    }
+
+    const updatedBrochures = adminBrochures.map(b =>
+      String(b.id) === String(id)
+        ? { ...b, title: editBrochureData.title, description: editBrochureData.description, allowDownload: editBrochureData.allowDownload }
+        : b
+    );
+
+    try {
+      const saveRes = await fetch("/api/brand-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          brochures: updatedBrochures,
+          videos: adminVideos
+        })
+      });
+      const saveData = await saveRes.json();
+      if (saveData.success) {
+        setAdminBrochures(updatedBrochures);
+        setEditingBrochureId(null);
+        addToast("브로슈어 정보가 수정되었습니다.", "success");
+      } else {
+        await safeAlert("수정 실패: " + saveData.error, "오류");
+      }
+    } catch (err: any) {
+      await safeAlert("수정 중 오류가 발생했습니다.", "오류 발생");
+    }
+  };
+
   // Handle deleting a brochure
   const handleDeleteBrochure = async (id: string) => {
     if (!(await safeConfirm("선택하신 브로슈어를 정말 삭제하시겠습니까?", "브로슈어 삭제"))) return;
@@ -2756,12 +2810,12 @@ export default function App() {
   const extractYoutubeId = (url: string): string => {
     if (!url) return "";
     const trimmed = url.trim();
-    
+
     // 1. If it's already an 11-character ID
     if (trimmed.length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
       return trimmed;
     }
-    
+
     // 2. Parse using standard URL if possible to extract 'v' parameter
     try {
       const urlObj = new URL(trimmed);
@@ -3010,6 +3064,17 @@ export default function App() {
             throw new Error(`[${row.title}] 업로드 실패`);
           }
         }
+        const isRowPdf = row.file ? row.file.name.toLowerCase().endsWith(".pdf") : finalUrl.toLowerCase().endsWith(".pdf");
+
+        let rowThumbnailUrl = "";
+        if (isRowPdf && finalUrl) {
+          try {
+            const thumb = await generatePdfThumbnail(finalUrl);
+            if (thumb) rowThumbnailUrl = thumb;
+          } catch (e) {
+            console.warn("Could not generate thumbnail for bulk row", e);
+          }
+        }
 
         uploadedItems.push({
           id: "b-" + (Date.now() + i),
@@ -3017,6 +3082,10 @@ export default function App() {
           description: row.description ? row.description.trim() : "",
           filename: row.file ? row.file.name : (finalUrl.split("/").pop() || "brochure.pdf"),
           url: finalUrl,
+          urls: [finalUrl],
+          type: isRowPdf ? 'pdf' : 'images',
+          allowDownload: true,
+          thumbnailUrl: rowThumbnailUrl,
           uploadedAt: new Date().toISOString()
         });
       }
@@ -3266,18 +3335,18 @@ export default function App() {
           )}
 
           {view === "admin" ? (
-            <button 
+            <button
               id="exit_admin_btn"
-              onClick={() => { setView("home"); }} 
+              onClick={() => { setView("home"); }}
               className="text-xs bg-[#0B3B24]/30 hover:bg-[#062919] text-white font-medium px-4 py-2.5 rounded border border-white/20 transition-all flex items-center space-x-1"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>진단 홈으로</span>
             </button>
           ) : (
-            <button 
+            <button
               id="admin_entry_btn"
-              onClick={() => { 
+              onClick={() => {
                 if (isAdminAuthenticated) {
                   setView("admin");
                 } else {
@@ -3286,7 +3355,7 @@ export default function App() {
                   setAdminAuthError("");
                   setView("admin");
                 }
-              }} 
+              }}
               className="text-xs bg-transparent hover:bg-white/10 text-white font-medium px-4 py-2.5 rounded transition-all flex items-center space-x-1.5 border border-white/20"
             >
               <Lock className="w-3.5 h-3.5 text-[#C5A059]" />
@@ -3296,9 +3365,9 @@ export default function App() {
         </nav>
 
         {/* Mobile Navigation Toggle Button */}
-        <motion.button 
+        <motion.button
           id="mobile_menu_toggle_btn"
-          onClick={() => setIsMobileMenuOpen(true)} 
+          onClick={() => setIsMobileMenuOpen(true)}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.90, rotate: -4 }}
           className="sm:hidden text-white hover:bg-white/10 p-2 rounded transition-all focus:outline-none flex items-center justify-center border border-white/15"
@@ -3322,7 +3391,7 @@ export default function App() {
               className="fixed inset-0 bg-black z-50 pointer-events-auto"
               id="mobile_menu_overlay"
             />
-            
+
             {/* Drawer Content */}
             <motion.div
               initial={{ x: "100%" }}
@@ -3341,7 +3410,7 @@ export default function App() {
                     </div>
                     <span className="font-display font-extrabold text-white text-base tracking-wider uppercase">KY Academy</span>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setIsMobileMenuOpen(false)}
                     className="text-white/70 hover:text-white p-1 rounded-md hover:bg-white/10 transition-colors"
                     aria-label="메뉴 닫기"
@@ -3358,11 +3427,10 @@ export default function App() {
                       setView("hub");
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all text-left ${
-                      view === "hub"
+                    className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all text-left ${view === "hub"
                         ? "bg-[#C5A059] text-[#0B3B24]"
                         : "text-white/90 hover:bg-white/10"
-                    }`}
+                      }`}
                   >
                     <LayoutDashboard className="w-4 h-4" />
                     <span>Opening Map 메인 홈</span>
@@ -3373,11 +3441,10 @@ export default function App() {
                       setView("brand");
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all text-left ${
-                      view === "brand"
+                    className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all text-left ${view === "brand"
                         ? "bg-[#C5A059] text-[#0B3B24]"
                         : "text-white/90 hover:bg-white/10"
-                    }`}
+                      }`}
                   >
                     <Search className="w-4 h-4" />
                     <span>브랜드 알아보기</span>
@@ -3388,11 +3455,10 @@ export default function App() {
                       setView("home");
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all text-left ${
-                      view === "home" || ["step1", "step2", "quiz", "result"].includes(view)
+                    className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all text-left ${view === "home" || ["step1", "step2", "quiz", "result"].includes(view)
                         ? "bg-[#C5A059] text-[#0B3B24]"
                         : "text-white/90 hover:bg-white/10"
-                    }`}
+                      }`}
                     id="mobile_menu_home_btn"
                   >
                     <BookOpen className="w-4 h-4" />
@@ -3404,11 +3470,10 @@ export default function App() {
                       setView("schedule");
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all text-left ${
-                      view === "schedule"
+                    className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all text-left ${view === "schedule"
                         ? "bg-[#C5A059] text-[#0B3B24]"
                         : "text-white/90 hover:bg-white/10"
-                    }`}
+                      }`}
                   >
                     <Calendar className="w-4 h-4" />
                     <span>개원일정 스케줄러</span>
@@ -3424,11 +3489,10 @@ export default function App() {
                       }
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all text-left ${
-                      view === "timetable"
+                    className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all text-left ${view === "timetable"
                         ? "bg-[#C5A059] text-[#0B3B24]"
                         : "text-white/90 hover:bg-white/10"
-                    }`}
+                      }`}
                   >
                     <Grid className="w-4 h-4" />
                     <span>시간표 제작기</span>
@@ -3448,11 +3512,10 @@ export default function App() {
                       }
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all text-left ${
-                      view === "admin"
+                    className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all text-left ${view === "admin"
                         ? "bg-[#C5A059] text-[#0B3B24]"
                         : "text-white/90 hover:bg-white/10"
-                    }`}
+                      }`}
                     id="mobile_menu_admin_btn"
                   >
                     <Lock className="w-4 h-4" />
@@ -3478,22 +3541,21 @@ export default function App() {
             {/* Elegant Horizontal Progress Stepper Card */}
             <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-3">
               <div className="relative flex items-center justify-between mx-auto max-w-4xl px-2">
-                
+
                 {/* Horizontal Background Track (Grey) */}
                 <div className="absolute left-[24px] right-[24px] top-1/2 -translate-y-1/2 h-[2px] bg-slate-100 z-0" />
-                
+
                 {/* Active Dynamic Track (Navy & Gold Gradient) */}
-                <div 
-                  className="absolute left-[24px] top-1/2 -translate-y-1/2 h-[2px] bg-gradient-to-r from-[#0B3B24] to-[#C5A059] transition-all duration-500 ease-out z-0" 
-                  style={{ 
-                    width: `${
-                      view === "home" ? "0%" :
-                      view === "step1" ? "25%" :
-                      view === "step2" ? "50%" :
-                      view === "quiz" ? "75%" :
-                      "100%"
-                    }` 
-                  }} 
+                <div
+                  className="absolute left-[24px] top-1/2 -translate-y-1/2 h-[2px] bg-gradient-to-r from-[#0B3B24] to-[#C5A059] transition-all duration-500 ease-out z-0"
+                  style={{
+                    width: `${view === "home" ? "0%" :
+                        view === "step1" ? "25%" :
+                          view === "step2" ? "50%" :
+                            view === "quiz" ? "75%" :
+                              "100%"
+                      }`
+                  }}
                 />
 
                 {[
@@ -3505,21 +3567,21 @@ export default function App() {
                 ].map((step, index) => {
                   const viewOrder = ["home", "step1", "step2", "quiz", "result"];
                   const currentIndex = viewOrder.indexOf(view);
-                  
+
                   const isActive = view === step.id;
                   const isCompleted = currentIndex > index;
-                  const isUnlocked = index === 0 || 
-                    (step.id === "step1") || 
+                  const isUnlocked = index === 0 ||
+                    (step.id === "step1") ||
                     (step.id === "step2" && verificationCode.trim().length === 4) ||
-                    (step.id === "quiz" && 
-                     verificationCode.trim().length === 4 && 
-                     basicInfo.name.trim() && 
-                     basicInfo.phone.trim() && 
-                     basicInfo.region.trim() && 
-                     basicInfo.phone.replace(/\D/g, "").startsWith("010") && 
-                     basicInfo.phone.replace(/\D/g, "").length === 11) ||
+                    (step.id === "quiz" &&
+                      verificationCode.trim().length === 4 &&
+                      basicInfo.name.trim() &&
+                      basicInfo.phone.trim() &&
+                      basicInfo.region.trim() &&
+                      basicInfo.phone.replace(/\D/g, "").startsWith("010") &&
+                      basicInfo.phone.replace(/\D/g, "").length === 11) ||
                     (step.id === "result" && diagnosisResult !== null);
-                  
+
                   // Helper function to handle step clicking safely
                   const handleStepClick = () => {
                     if (step.id === "home") {
@@ -3557,36 +3619,33 @@ export default function App() {
                   };
 
                   return (
-                    <div 
-                      key={step.id} 
-                      className={`relative flex flex-col items-center text-center z-10 select-none ${
-                        isUnlocked ? "cursor-pointer group" : "cursor-not-allowed"
-                      }`}
+                    <div
+                      key={step.id}
+                      className={`relative flex flex-col items-center text-center z-10 select-none ${isUnlocked ? "cursor-pointer group" : "cursor-not-allowed"
+                        }`}
                       onClick={isUnlocked ? handleStepClick : undefined}
                     >
                       {/* Circle indicator node (compact sizes) */}
-                      <div 
-                        className={`w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center font-extrabold text-xs md:text-sm border transition-all duration-300 ${
-                          isActive 
-                            ? "bg-[#0B3B24] text-white border-[#C5A059] shadow-[0_0_8px_rgba(197,160,89,0.3)] scale-105" 
-                            : isCompleted 
+                      <div
+                        className={`w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center font-extrabold text-xs md:text-sm border transition-all duration-300 ${isActive
+                            ? "bg-[#0B3B24] text-white border-[#C5A059] shadow-[0_0_8px_rgba(197,160,89,0.3)] scale-105"
+                            : isCompleted
                               ? "bg-emerald-500 text-white border-emerald-500 shadow-sm"
                               : isUnlocked
                                 ? "bg-white text-[#0B3B24] border-slate-200 hover:border-[#0B3B24] hover:bg-slate-50"
                                 : "bg-slate-50 text-slate-400 border-slate-100"
-                        }`}
+                          }`}
                       >
                         {isCompleted ? "✓" : step.stepNum}
                       </div>
 
                       {/* Step responsive labels (tight layout) */}
                       <div className="mt-1 flex flex-col items-center">
-                        <span 
-                          className={`text-[8.5px] sm:text-[11px] font-bold leading-tight font-sans tracking-tight text-center max-w-[65px] sm:max-w-none ${
-                            isActive 
-                              ? "text-[#0B3B24] block" 
+                        <span
+                          className={`text-[8.5px] sm:text-[11px] font-bold leading-tight font-sans tracking-tight text-center max-w-[65px] sm:max-w-none ${isActive
+                              ? "text-[#0B3B24] block"
                               : "text-slate-500 hidden sm:block"
-                          }`}
+                            }`}
                         >
                           {step.label}
                         </span>
@@ -3601,7 +3660,7 @@ export default function App() {
         )}
 
         <AnimatePresence mode="wait">
-          
+
           {/* VIEW: HUB PORTAL */}
           {view === "hub" && (
             <HubView setView={setView} isAdminAuthenticated={isAdminAuthenticated} />
@@ -3624,7 +3683,7 @@ export default function App() {
 
           {/* VIEW: HOME LANDING */}
           {view === "home" && (
-            <motion.div 
+            <motion.div
               key="view_home"
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
@@ -3636,7 +3695,7 @@ export default function App() {
                 {/* Visual Accent Corner Elements */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#C5A059]/10 to-transparent rounded-full filter blur-xl pointer-events-none" />
                 <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-tr from-[#0B3B24]/5 to-transparent rounded-full filter blur-xl pointer-events-none" />
-                
+
                 {/* High class Badge */}
                 <div className="inline-flex items-center space-x-2 px-3 py-1 bg-[#0B3B24]/5 rounded-full border border-[#0B3B24]/10 text-[11px] tracking-widest text-[#0B3B24] font-extrabold uppercase mb-8">
                   <Sparkles className="w-3 h-3 text-[#C5A059]" />
@@ -3715,7 +3774,7 @@ export default function App() {
 
           {/* VIEW: STEP 1 - Code Entry */}
           {view === "step1" && (
-            <motion.div 
+            <motion.div
               key="view_step1"
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -3724,7 +3783,7 @@ export default function App() {
               id="section_step1"
             >
               <div className="p-8 rounded-xl bg-white border border-[#E5E7EB] shadow-lg relative overflow-hidden border-t-8 border-t-[#C5A059]">
-                
+
                 <h2 className="text-2xl font-bold text-[#0B3B24] mb-2 text-center">컨설턴트 코드 입력</h2>
                 <p className="text-[#4B5563] text-sm text-center mb-6">
                   개원 상담 신청 혹은 담당 컨설턴트로부터 부여받은 4자리 고유 인증 코드를 기재해주세요.
@@ -3748,7 +3807,7 @@ export default function App() {
 
                   {/* Dynamic Match Feedback */}
                   {counselorMatched && (
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, y: 5 }}
                       animate={{ opacity: 1, y: 0 }}
                       className="p-3.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center space-x-2"
@@ -3784,7 +3843,7 @@ export default function App() {
 
           {/* VIEW: STEP 2 - Basic Info Form */}
           {view === "step2" && (
-            <motion.div 
+            <motion.div
               key="view_step2"
               initial={{ opacity: 0, x: 15 }}
               animate={{ opacity: 1, x: 0 }}
@@ -3793,14 +3852,14 @@ export default function App() {
               id="section_step2"
             >
               <div className="p-5 md:p-6 rounded-2xl bg-white border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.02)] relative border-t-8 border-t-[#C5A059]">
-                
+
                 <div className="flex items-center justify-between mb-5 border-b pb-4 border-slate-100">
                   <div>
                     <span className="text-[10px] md:text-xs text-[#C5A059] font-black uppercase tracking-wider">STEP 2 of 4</span>
                     <h2 className="text-xl md:text-2xl font-bold text-[#0B3B24]">진단 희망인 기본정보 입력</h2>
                   </div>
-                  <button 
-                    onClick={() => { setView("step1"); }} 
+                  <button
+                    onClick={() => { setView("step1"); }}
                     className="text-slate-500 hover:text-[#0B3B24] text-xs flex items-center space-x-1 font-semibold transition-colors duration-150"
                   >
                     <ArrowLeft className="w-3.5 h-3.5" />
@@ -3809,7 +3868,7 @@ export default function App() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4 mb-5" id="basic_info_form_grid">
-                  
+
                   {/* --- Row 1 --- */}
                   {/* Name input */}
                   <div className="md:col-span-1">
@@ -3832,43 +3891,43 @@ export default function App() {
 
                   {/* Phone input */}
                   <div className="md:col-span-1">
-                     <label className="block text-[#0B3B24] text-xs font-bold mb-1.5 uppercase" htmlFor="applicant_phone">
-                       연락처 <span className="text-red-500">*</span>
-                     </label>
-                     <div className="relative font-sans animate-fade">
-                       <Phone className="absolute left-3 top-[9px] w-3.5 h-3.5 text-[#C5A059]" />
-                       <input
-                         id="applicant_phone"
-                         type="tel"
-                         required
-                         value={basicInfo.phone}
-                         onChange={(e) => setBasicInfo({ ...basicInfo, phone: e.target.value })}
-                         placeholder="010-0000-0000"
-                         className="w-full bg-white border-2 border-[#E5E7EB] rounded-lg pl-9 pr-3 py-1.5 focus:outline-none focus:border-[#C5A059] text-slate-800 text-xs shadow-sm focus:ring-1 focus:ring-[#C5A059]"
-                       />
-                     </div>
-                     {basicInfo.phone && (() => {
-                       const cleaned = basicInfo.phone.replace(/\D/g, "");
-                       if (!cleaned.startsWith("010")) {
-                         return (
-                           <p className="text-red-500 text-[10px] mt-1 font-semibold flex items-center gap-1">
-                             <span>⚠️ '010' 필수</span>
-                           </p>
-                         );
-                       }
-                       if (cleaned.length !== 11) {
-                         return (
-                           <p className="text-amber-600 text-[10px] mt-1 font-semibold flex items-center gap-1">
-                             <span>⚠️ 11자리 입력</span>
-                           </p>
-                         );
-                       }
-                       return (
-                         <p className="text-emerald-600 text-[10px] mt-1 font-semibold flex items-center gap-1">
-                           <span>✓ 올바른 번호</span>
-                         </p>
-                       );
-                     })()}
+                    <label className="block text-[#0B3B24] text-xs font-bold mb-1.5 uppercase" htmlFor="applicant_phone">
+                      연락처 <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative font-sans animate-fade">
+                      <Phone className="absolute left-3 top-[9px] w-3.5 h-3.5 text-[#C5A059]" />
+                      <input
+                        id="applicant_phone"
+                        type="tel"
+                        required
+                        value={basicInfo.phone}
+                        onChange={(e) => setBasicInfo({ ...basicInfo, phone: e.target.value })}
+                        placeholder="010-0000-0000"
+                        className="w-full bg-white border-2 border-[#E5E7EB] rounded-lg pl-9 pr-3 py-1.5 focus:outline-none focus:border-[#C5A059] text-slate-800 text-xs shadow-sm focus:ring-1 focus:ring-[#C5A059]"
+                      />
+                    </div>
+                    {basicInfo.phone && (() => {
+                      const cleaned = basicInfo.phone.replace(/\D/g, "");
+                      if (!cleaned.startsWith("010")) {
+                        return (
+                          <p className="text-red-500 text-[10px] mt-1 font-semibold flex items-center gap-1">
+                            <span>⚠️ '010' 필수</span>
+                          </p>
+                        );
+                      }
+                      if (cleaned.length !== 11) {
+                        return (
+                          <p className="text-amber-600 text-[10px] mt-1 font-semibold flex items-center gap-1">
+                            <span>⚠️ 11자리 입력</span>
+                          </p>
+                        );
+                      }
+                      return (
+                        <p className="text-emerald-600 text-[10px] mt-1 font-semibold flex items-center gap-1">
+                          <span>✓ 올바른 번호</span>
+                        </p>
+                      );
+                    })()}
                   </div>
 
                   {/* Birth month (Separated Year and Month Boxes) */}
@@ -3925,11 +3984,10 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => setBasicInfo({ ...basicInfo, region: basicInfo.region === "없음 (미정)" ? "" : "없음 (미정)" })}
-                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded transition-all border cursor-pointer ${
-                          basicInfo.region === "없음 (미정)"
+                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded transition-all border cursor-pointer ${basicInfo.region === "없음 (미정)"
                             ? "bg-[#C5A059] text-white border-[#C5A059]"
                             : "bg-slate-50 text-slate-500 hover:text-[#C5A059] hover:bg-slate-100 border-[#E5E7EB]"
-                        }`}
+                          }`}
                       >
                         미정 선택
                       </button>
@@ -3997,22 +4055,20 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => setBasicInfo({ ...basicInfo, franchiseType: "신규 창업" })}
-                        className={`py-1.5 rounded-lg text-xs font-extrabold border transition-all cursor-pointer shadow-sm ${
-                          basicInfo.franchiseType === "신규 창업"
+                        className={`py-1.5 rounded-lg text-xs font-extrabold border transition-all cursor-pointer shadow-sm ${basicInfo.franchiseType === "신규 창업"
                             ? "bg-[#0B3B24] border-[#C5A059] text-white shadow-md active:scale-95"
                             : "bg-slate-50 hover:bg-slate-100 border-[#E5E7EB] text-slate-600 hover:text-[#0B3B24]"
-                        }`}
+                          }`}
                       >
                         신규 창업
                       </button>
                       <button
                         type="button"
                         onClick={() => setBasicInfo({ ...basicInfo, franchiseType: "브랜드 전환" })}
-                        className={`py-1.5 rounded-lg text-xs font-extrabold border transition-all cursor-pointer shadow-sm ${
-                          basicInfo.franchiseType === "브랜드 전환"
+                        className={`py-1.5 rounded-lg text-xs font-extrabold border transition-all cursor-pointer shadow-sm ${basicInfo.franchiseType === "브랜드 전환"
                             ? "bg-[#0B3B24] border-[#C5A059] text-white shadow-md active:scale-95"
                             : "bg-slate-50 hover:bg-slate-100 border-[#E5E7EB] text-slate-600 hover:text-[#0B3B24]"
-                        }`}
+                          }`}
                       >
                         브랜드 전환
                       </button>
@@ -4031,11 +4087,10 @@ export default function App() {
                           key={op}
                           type="button"
                           onClick={() => setBasicInfo({ ...basicInfo, operationType: op })}
-                          className={`py-1.5 rounded-lg text-xs font-extrabold border transition-all cursor-pointer shadow-sm ${
-                            basicInfo.operationType === op
+                          className={`py-1.5 rounded-lg text-xs font-extrabold border transition-all cursor-pointer shadow-sm ${basicInfo.operationType === op
                               ? "bg-[#0B3B24] border-[#C5A059] text-white shadow-md active:scale-95"
                               : "bg-slate-50 hover:bg-slate-100 border-[#E5E7EB] text-slate-600 hover:text-[#0B3B24]"
-                          }`}
+                            }`}
                         >
                           {op}
                         </button>
@@ -4054,11 +4109,10 @@ export default function App() {
                           key={maj}
                           type="button"
                           onClick={() => setBasicInfo({ ...basicInfo, englishMajor: maj })}
-                          className={`py-1.5 rounded-lg text-xs font-extrabold border transition-all cursor-pointer shadow-sm ${
-                            basicInfo.englishMajor === maj
+                          className={`py-1.5 rounded-lg text-xs font-extrabold border transition-all cursor-pointer shadow-sm ${basicInfo.englishMajor === maj
                               ? "bg-[#0B3B24] border-[#C5A059] text-white shadow-md active:scale-95"
                               : "bg-slate-50 hover:bg-slate-100 border-[#E5E7EB] text-slate-600 hover:text-[#0B3B24]"
-                          }`}
+                            }`}
                         >
                           {maj}
                         </button>
@@ -4077,11 +4131,10 @@ export default function App() {
                           key={spe}
                           type="button"
                           onClick={() => setBasicInfo({ ...basicInfo, englishSpeaking: spe })}
-                          className={`py-1.5 rounded-lg text-xs font-extrabold border transition-all cursor-pointer shadow-sm ${
-                            basicInfo.englishSpeaking === spe
+                          className={`py-1.5 rounded-lg text-xs font-extrabold border transition-all cursor-pointer shadow-sm ${basicInfo.englishSpeaking === spe
                               ? "bg-[#0B3B24] border-[#C5A059] text-white shadow-md active:scale-95"
                               : "bg-slate-50 hover:bg-slate-100 border-[#E5E7EB] text-slate-600 hover:text-[#0B3B24]"
-                          }`}
+                            }`}
                         >
                           {spe}
                         </button>
@@ -4099,11 +4152,10 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => setBasicInfo({ ...basicInfo, personality: "내향형" })}
-                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer shadow-sm ${
-                          basicInfo.personality === "내향형"
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer shadow-sm ${basicInfo.personality === "내향형"
                             ? "bg-[#0B3B24]/5 border-2 border-[#C5A059] text-[#0B3B24] shadow-md scale-[1.01]"
                             : "bg-white border-2 border-[#E5E7EB] hover:border-slate-300 text-slate-600 hover:text-slate-800"
-                        }`}
+                          }`}
                       >
                         <span className="block font-extrabold text-sm mb-1 text-[#0B3B24]">인내와 디테일형 (내향형)</span>
                         <span className="block text-[11px] text-slate-500 leading-relaxed">조용하고 디테일하며 꼼꼼한 관리 지향 타입</span>
@@ -4111,11 +4163,10 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => setBasicInfo({ ...basicInfo, personality: "외향형" })}
-                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer shadow-sm ${
-                          basicInfo.personality === "외향형"
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer shadow-sm ${basicInfo.personality === "외향형"
                             ? "bg-[#0B3B24]/5 border-2 border-[#C5A059] text-[#0B3B24] shadow-md scale-[1.01]"
                             : "bg-white border-2 border-[#E5E7EB] hover:border-slate-300 text-slate-600 hover:text-slate-800"
-                        }`}
+                          }`}
                       >
                         <span className="block font-extrabold text-sm mb-1 text-[#0B3B24]">열정과 커뮤니케이션형 (외향형)</span>
                         <span className="block text-[11px] text-slate-500 leading-relaxed">활기찬 학부모 대면 설명회 및 강사진 주도형 타입</span>
@@ -4134,11 +4185,10 @@ export default function App() {
                           key={route}
                           type="button"
                           onClick={() => setBasicInfo({ ...basicInfo, inflowRoute: route })}
-                          className={`py-2 px-1.5 rounded-lg text-xs font-extrabold border transition-all cursor-pointer shadow-sm ${
-                            basicInfo.inflowRoute === route
+                          className={`py-2 px-1.5 rounded-lg text-xs font-extrabold border transition-all cursor-pointer shadow-sm ${basicInfo.inflowRoute === route
                               ? "bg-[#0B3B24] border-[#C5A059] text-white shadow-md active:scale-95"
                               : "bg-slate-50 hover:bg-slate-100 border-[#E5E7EB] text-slate-600 hover:text-[#0B3B24]"
-                          }`}
+                            }`}
                         >
                           {route}
                         </button>
@@ -4210,7 +4260,7 @@ export default function App() {
 
           {/* VIEW: STEP 3 - Diagnostic Questionnaire (Quiz) */}
           {view === "quiz" && (
-            <motion.div 
+            <motion.div
               key="view_quiz"
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -4237,7 +4287,7 @@ export default function App() {
 
                 {/* Visual Progress Bar */}
                 <div className="w-full h-1.5 bg-slate-100 rounded-full mb-8 overflow-hidden">
-                  <motion.div 
+                  <motion.div
                     className="h-full bg-gradient-to-r from-[#0B3B24] to-[#C5A059]"
                     initial={{ width: 0 }}
                     animate={{ width: `${((currentQuestionIndex + 1) / activeQuestionsList.length) * 100}%` }}
@@ -4270,18 +4320,16 @@ export default function App() {
                           <button
                             key={opt.value}
                             onClick={() => handleAnswerSelect(opt.value)}
-                            className={`w-full text-left p-4 rounded-lg border transition-all flex items-center justify-between group ${
-                              isSelected
+                            className={`w-full text-left p-4 rounded-lg border transition-all flex items-center justify-between group ${isSelected
                                 ? "bg-[#0B3B24]/5 border-2 border-[#C5A059] text-[#0B3B24] shadow-sm font-semibold"
                                 : "bg-white hover:bg-slate-50 border-[#E5E7EB] text-slate-700"
-                            }`}
+                              }`}
                           >
                             <div className="flex items-center space-x-3.5">
-                              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold transition-colors ${
-                                isSelected 
-                                  ? "bg-[#0B3B24] text-white" 
+                              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold transition-colors ${isSelected
+                                  ? "bg-[#0B3B24] text-white"
                                   : "bg-slate-100 text-slate-500 group-hover:bg-slate-200"
-                              }`}>
+                                }`}>
                                 {opt.value}
                               </span>
                               <span className="text-sm">{opt.text}</span>
@@ -4335,7 +4383,7 @@ export default function App() {
 
           {/* VIEW: STEP 4 - Results Analytics Page */}
           {view === "result" && (
-            <motion.div 
+            <motion.div
               key="view_result"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -4355,7 +4403,7 @@ export default function App() {
               ) : (
                 diagnosisResult && (
                   <div className="space-y-6" id="report_ready_panel">
-                    
+
                     {/* Admin Back to Admin & Print Bar */}
                     {isAdminAuthenticated && (
                       <div className="p-4 bg-[#C5A059]/15 border-2 border-[#C5A059] rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print shadow-md animate-fade-in" id="admin_top_control_bar">
@@ -4391,21 +4439,19 @@ export default function App() {
                       <div className="flex bg-slate-100 p-1.5 rounded-xl border border-slate-200/50 w-full no-print">
                         <button
                           onClick={() => setResultActiveTab("page1")}
-                          className={`flex-1 py-3 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer h-12 flex items-center justify-center ${
-                            resultActiveTab === "page1"
+                          className={`flex-1 py-3 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer h-12 flex items-center justify-center ${resultActiveTab === "page1"
                               ? "bg-[#0B3B24] text-white shadow-md font-extrabold"
                               : "text-slate-500 hover:text-slate-800 hover:bg-slate-200/50"
-                          }`}
+                            }`}
                         >
                           1페이지: 핵심 요약 (PROPORTIONAL METRICS)
                         </button>
                         <button
                           onClick={() => setResultActiveTab("page2")}
-                          className={`flex-1 py-3 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer h-12 flex items-center justify-center ${
-                            resultActiveTab === "page2"
+                          className={`flex-1 py-3 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer h-12 flex items-center justify-center ${resultActiveTab === "page2"
                               ? "bg-[#0B3B24] text-white shadow-md font-extrabold"
                               : "text-slate-500 hover:text-slate-800 hover:bg-slate-200/50"
-                          }`}
+                            }`}
                         >
                           2페이지: 항목별 상세 코멘트 & 로드맵 (DETAILED SOLUTIONS)
                         </button>
@@ -4442,935 +4488,932 @@ export default function App() {
 
                       return (
                         <div className="space-y-10" id="result_page_one_view">
-                          
+
                           {/* [상단 헤더] */}
-                          <motion.div 
+                          <motion.div
                             initial={{ opacity: 0, y: 15 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.45, ease: "easeOut" }}
-                            className={`${gradientClass} border rounded-2xl p-6 sm:p-12 shadow-sm relative overflow-hidden`} 
+                            className={`${gradientClass} border rounded-2xl p-6 sm:p-12 shadow-sm relative overflow-hidden`}
                             id="page1_header_card"
                           >
-                          <div className="flex flex-col md:flex-row items-center gap-8">
-                            
-                            {/* Radial circular grade badge */}
+                            <div className="flex flex-col md:flex-row items-center gap-8">
+
+                              {/* Radial circular grade badge */}
+                              {(() => {
+                                const grade = diagnosisResult.competencyRank || "C";
+                                const colors: Record<string, { main: string, text: string, bg: string, ring: string }> = {
+                                  S: { main: "#D4AF37", text: "text-[#D4AF37]", bg: "bg-[#D4AF37]/10", ring: "border-[#D4AF37]" },
+                                  A: { main: "#10B981", text: "text-[#10B981]", bg: "bg-emerald-50/50", ring: "border-[#10B981]" },
+                                  B: { main: "#3B82F6", text: "text-[#3B82F6]", bg: "bg-blue-50/50", ring: "border-[#3B82F6]" },
+                                  C: { main: "#F97316", text: "text-[#F97316]", bg: "bg-orange-50/50", ring: "border-[#F97316]" },
+                                  D: { main: "#EF4444", text: "text-[#EF4444]", bg: "bg-red-50/50", ring: "border-[#EF4444]" }
+                                };
+                                const cfg = colors[grade] || colors.C;
+                                const label = getCompetencyLabelAndDesc(grade, diagnosisResult.franchiseType);
+
+                                return (
+                                  <>
+                                    <div className="relative flex items-center justify-center shrink-0">
+                                      <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 ${cfg.ring} ${cfg.bg} flex flex-col items-center justify-center shadow-lg transition-transform hover:scale-105`}>
+                                        <span className={`text-3xl sm:text-4xl font-extrabold ${cfg.text} font-mono block leading-none`}>{grade}</span>
+                                        <span className="text-[10px] text-slate-400 font-bold font-mono mt-1">GRADE</span>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex-1 text-center md:text-left space-y-2.5">
+                                      <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5">
+                                        <span className="text-xl sm:text-2xl font-black text-slate-800">{grade}등급 진단 리포트</span>
+                                        <span className="text-sm px-3 py-1 font-mono font-bold bg-[#0B3B24] text-[#C5A059] rounded-lg">
+                                          종합점수 {diagnosisResult.totalScore} / {diagnosisResult.franchiseType === "브랜드 전환" || diagnosisResult.franchiseType === "브랜드전환" ? "40" : "30"}점
+                                        </span>
+                                        <span className={`px-2.5 py-1 rounded text-xs font-bold border ${cfg.bg} ${cfg.text} ${cfg.ring}/30`}>
+                                          {label}
+                                        </span>
+                                      </div>
+                                      <p className="text-sm text-slate-500 font-medium leading-relaxed max-w-2xl">
+                                        {diagnosisResult.name} 원장님 (만 {calculateKoreanAge(diagnosisResult.birth)}세) • 가맹유형: <strong className="text-slate-800">{diagnosisResult.franchiseType}</strong> • 직인일자: {new Date(diagnosisResult.appliedAt).toLocaleDateString()} • 컨설턴트: {diagnosisResult.counselorName}
+                                      </p>
+                                    </div>
+                                  </>
+                                );
+                              })()}
+                            </div>
+
+                            {/* [Visual Grade Position Spectrum] */}
                             {(() => {
+                              const isBrand = diagnosisResult.franchiseType === "브랜드 전환" || diagnosisResult.franchiseType === "브랜드전환";
+                              const totalScore = diagnosisResult.totalScore || 0;
                               const grade = diagnosisResult.competencyRank || "C";
-                              const colors: Record<string, { main: string, text: string, bg: string, ring: string }> = {
-                                S: { main: "#D4AF37", text: "text-[#D4AF37]", bg: "bg-[#D4AF37]/10", ring: "border-[#D4AF37]" },
-                                A: { main: "#10B981", text: "text-[#10B981]", bg: "bg-emerald-50/50", ring: "border-[#10B981]" },
-                                B: { main: "#3B82F6", text: "text-[#3B82F6]", bg: "bg-blue-50/50", ring: "border-[#3B82F6]" },
-                                C: { main: "#F97316", text: "text-[#F97316]", bg: "bg-orange-50/50", ring: "border-[#F97316]" },
-                                D: { main: "#EF4444", text: "text-[#EF4444]", bg: "bg-red-50/50", ring: "border-[#EF4444]" }
-                              };
-                              const cfg = colors[grade] || colors.C;
-                              const label = getCompetencyLabelAndDesc(grade, diagnosisResult.franchiseType);
+
+                              const segments = isBrand ? [
+                                { grade: "D", min: 0, max: 12, label: "보완 필요", bg: "bg-red-400", hex: "#F87171" },
+                                { grade: "C", min: 13, max: 22, label: "개선 권장", bg: "bg-orange-400", hex: "#FB923C" },
+                                { grade: "B", min: 23, max: 29, label: "준수함", bg: "bg-blue-400", hex: "#60A5FA" },
+                                { grade: "A", min: 30, max: 35, label: "우수함", bg: "bg-emerald-400", hex: "#34D399" },
+                                { grade: "S", min: 36, max: 40, label: "탁월함", bg: "bg-[#D4AF37]", hex: "#D4AF37" }
+                              ] : [
+                                { grade: "D", min: 0, max: 6, label: "보완 필요", bg: "bg-red-400", hex: "#F87171" },
+                                { grade: "C", min: 7, max: 12, label: "개선 권장", bg: "bg-orange-400", hex: "#FB923C" },
+                                { grade: "B", min: 13, max: 19, label: "준수함", bg: "bg-blue-400", hex: "#60A5FA" },
+                                { grade: "A", min: 20, max: 23, label: "우수함", bg: "bg-emerald-400", hex: "#34D399" },
+                                { grade: "S", min: 24, max: 30, label: "탁월함", bg: "bg-[#D4AF37]", hex: "#D4AF37" }
+                              ];
+
+                              let activeSegmentIndex = segments.findIndex(seg => totalScore >= seg.min && totalScore <= seg.max);
+                              if (activeSegmentIndex === -1) {
+                                if (totalScore < segments[0].min) activeSegmentIndex = 0;
+                                else activeSegmentIndex = segments.length - 1;
+                              }
+
+                              const activeSeg = segments[activeSegmentIndex];
+                              const rangeSize = activeSeg.max - activeSeg.min;
+                              const relativeOffset = rangeSize > 0 ? (totalScore - activeSeg.min) / rangeSize : 0.5;
+                              const clampedOffset = Math.min(1, Math.max(0, relativeOffset));
+
+                              // Each block represents 20% width. Pin position is activeSegmentIndex * 20 + offset * 20.
+                              const positionPercent = (activeSegmentIndex * 20) + (clampedOffset * 20);
 
                               return (
-                                <>
-                                  <div className="relative flex items-center justify-center shrink-0">
-                                    <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 ${cfg.ring} ${cfg.bg} flex flex-col items-center justify-center shadow-lg transition-transform hover:scale-105`}>
-                                      <span className={`text-3xl sm:text-4xl font-extrabold ${cfg.text} font-mono block leading-none`}>{grade}</span>
-                                      <span className="text-[10px] text-slate-400 font-bold font-mono mt-1">GRADE</span>
+                                <div className="border-t border-slate-100 mt-8 pt-8" id="grade_position_spectrum_pane">
+                                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                                    <div className="space-y-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] tracking-[0.1em] text-[#C5A059] font-sans font-bold uppercase block">DIAGNOSIS ACCURACY & GRADE LOCATION</span>
+                                        <span className="bg-[#0B3B24]/5 text-[#0B3B24] text-[10px] font-bold px-2 py-0.5 rounded-full border border-[#0B3B24]/10">실시간 매핑</span>
+                                      </div>
+                                      <h4 className="text-[15px] font-bold text-slate-800">원장님 종합 역량 등급의 포지션</h4>
+                                    </div>
+                                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex items-center justify-between gap-8 md:min-w-[280px]">
+                                      <div className="text-left space-y-0.5">
+                                        <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">진단 총점</span>
+                                        <span className="text-sm font-extrabold text-slate-800">{totalScore}점 <span className="text-slate-400 font-medium text-xs">/ {isBrand ? "40" : "30"}점</span></span>
+                                      </div>
+                                      <div className="w-px h-8 bg-slate-200"></div>
+                                      <div className="text-left space-y-0.5">
+                                        <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">종합 개원 역량 등급</span>
+                                        <span className="text-sm font-extrabold text-[#0B3B24]">{grade}등급 <span className="text-slate-400 font-bold text-xs">({activeSeg.label})</span></span>
+                                      </div>
                                     </div>
                                   </div>
-                                  
-                                  <div className="flex-1 text-center md:text-left space-y-2.5">
-                                    <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5">
-                                      <span className="text-xl sm:text-2xl font-black text-slate-800">{grade}등급 진단 리포트</span>
-                                      <span className="text-sm px-3 py-1 font-mono font-bold bg-[#0B3B24] text-[#C5A059] rounded-lg">
-                                        종합점수 {diagnosisResult.totalScore} / {diagnosisResult.franchiseType === "브랜드 전환" || diagnosisResult.franchiseType === "브랜드전환" ? "40" : "30"}점
-                                      </span>
-                                      <span className={`px-2.5 py-1 rounded text-xs font-bold border ${cfg.bg} ${cfg.text} ${cfg.ring}/30`}>
-                                        {label}
-                                      </span>
+
+                                  <div className="relative pt-12 pb-6 px-1">
+                                    {/* Floating PIN / Indicator pointing to the exact percentage position */}
+                                    <motion.div
+                                      className="absolute top-0 z-20 flex flex-col items-center -translate-x-1/2"
+                                      style={{ left: `${positionPercent}%` }}
+                                      initial={{ scale: 0.5, opacity: 0 }}
+                                      animate={{ scale: 1, opacity: 1 }}
+                                      transition={{ type: "spring", stiffness: 100, damping: 15, delay: 0.2 }}
+                                    >
+                                      {/* Visual Marker Label */}
+                                      <div className="bg-[#0B3B24] text-white text-[11px] font-bold px-3 py-1.5 rounded-full shadow-md flex items-center gap-1.5 shrink-0 select-none border border-[#C5A059]/40 whitespace-nowrap">
+                                        <span className="w-2 h-2 rounded-full bg-[#10B981] animate-ping shrink-0" />
+                                        <span>원장님 위치: <strong className="text-[#C5A059] font-mono">{grade}등급</strong> ({totalScore}점)</span>
+                                      </div>
+                                      {/* Down arrow marker */}
+                                      <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-[#0B3B24] shadow-sm" />
+                                    </motion.div>
+
+                                    {/* The spectrum track */}
+                                    <div className="relative w-full h-4 bg-slate-100 rounded-full flex overflow-hidden shadow-inner border border-slate-200/50">
+                                      {segments.map((seg, idx) => {
+                                        const isActive = idx === activeSegmentIndex;
+                                        return (
+                                          <div
+                                            key={seg.grade}
+                                            className={`w-[20%] h-full relative transition-all duration-300 ${seg.bg} ${isActive ? 'brightness-105 saturate-125' : 'opacity-70 saturate-75'} flex items-center justify-center`}
+                                          >
+                                            {/* Fine border dividing line */}
+                                            {idx < 4 && <div className="absolute right-0 top-0 bottom-0 w-px bg-white/40" />}
+                                          </div>
+                                        );
+                                      })}
                                     </div>
-                                    <p className="text-sm text-slate-500 font-medium leading-relaxed max-w-2xl">
-                                      {diagnosisResult.name} 원장님 (만 {calculateKoreanAge(diagnosisResult.birth)}세) • 가맹유형: <strong className="text-slate-800">{diagnosisResult.franchiseType}</strong> • 직인일자: {new Date(diagnosisResult.appliedAt).toLocaleDateString()} • 컨설턴트: {diagnosisResult.counselorName}
-                                    </p>
+
+                                    {/* Segment markers/labels below the track */}
+                                    <div className="grid grid-cols-5 mt-4 sm:mt-5 text-center">
+                                      {segments.map((seg, idx) => {
+                                        const isActive = idx === activeSegmentIndex;
+                                        return (
+                                          <div key={seg.grade} className="flex flex-col items-center space-y-1 select-none">
+                                            {/* Grade Character Bubble */}
+                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-extrabold ${isActive ? 'bg-[#0B3B24] text-white ring-2 ring-[#C5A059]/50 shadow-sm scale-110' : 'bg-slate-100 text-slate-500'} transition-all duration-300`}>
+                                              {seg.grade}
+                                            </div>
+                                            {/* Info and range */}
+                                            <span className={`text-[11px] font-bold tracking-tight block ${isActive ? 'text-[#0B3B24]' : 'text-slate-500'}`}>
+                                              {seg.label}
+                                            </span>
+                                            <span className="font-mono text-[10px] text-slate-400 font-medium block">
+                                              {seg.min}~{seg.max}점
+                                            </span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
                                   </div>
-                                </>
+                                </div>
                               );
                             })()}
-                          </div>
-
-                          {/* [Visual Grade Position Spectrum] */}
-                          {(() => {
-                            const isBrand = diagnosisResult.franchiseType === "브랜드 전환" || diagnosisResult.franchiseType === "브랜드전환";
-                            const totalScore = diagnosisResult.totalScore || 0;
-                            const grade = diagnosisResult.competencyRank || "C";
-
-                            const segments = isBrand ? [
-                              { grade: "D", min: 0, max: 12, label: "보완 필요", bg: "bg-red-400", hex: "#F87171" },
-                              { grade: "C", min: 13, max: 22, label: "개선 권장", bg: "bg-orange-400", hex: "#FB923C" },
-                              { grade: "B", min: 23, max: 29, label: "준수함", bg: "bg-blue-400", hex: "#60A5FA" },
-                              { grade: "A", min: 30, max: 35, label: "우수함", bg: "bg-emerald-400", hex: "#34D399" },
-                              { grade: "S", min: 36, max: 40, label: "탁월함", bg: "bg-[#D4AF37]", hex: "#D4AF37" }
-                            ] : [
-                              { grade: "D", min: 0, max: 6, label: "보완 필요", bg: "bg-red-400", hex: "#F87171" },
-                              { grade: "C", min: 7, max: 12, label: "개선 권장", bg: "bg-orange-400", hex: "#FB923C" },
-                              { grade: "B", min: 13, max: 19, label: "준수함", bg: "bg-blue-400", hex: "#60A5FA" },
-                              { grade: "A", min: 20, max: 23, label: "우수함", bg: "bg-emerald-400", hex: "#34D399" },
-                              { grade: "S", min: 24, max: 30, label: "탁월함", bg: "bg-[#D4AF37]", hex: "#D4AF37" }
-                            ];
-
-                            let activeSegmentIndex = segments.findIndex(seg => totalScore >= seg.min && totalScore <= seg.max);
-                            if (activeSegmentIndex === -1) {
-                              if (totalScore < segments[0].min) activeSegmentIndex = 0;
-                              else activeSegmentIndex = segments.length - 1;
-                            }
-
-                            const activeSeg = segments[activeSegmentIndex];
-                            const rangeSize = activeSeg.max - activeSeg.min;
-                            const relativeOffset = rangeSize > 0 ? (totalScore - activeSeg.min) / rangeSize : 0.5;
-                            const clampedOffset = Math.min(1, Math.max(0, relativeOffset));
-
-                            // Each block represents 20% width. Pin position is activeSegmentIndex * 20 + offset * 20.
-                            const positionPercent = (activeSegmentIndex * 20) + (clampedOffset * 20);
-
-                            return (
-                              <div className="border-t border-slate-100 mt-8 pt-8" id="grade_position_spectrum_pane">
-                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                                  <div className="space-y-1">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-[10px] tracking-[0.1em] text-[#C5A059] font-sans font-bold uppercase block">DIAGNOSIS ACCURACY & GRADE LOCATION</span>
-                                      <span className="bg-[#0B3B24]/5 text-[#0B3B24] text-[10px] font-bold px-2 py-0.5 rounded-full border border-[#0B3B24]/10">실시간 매핑</span>
-                                    </div>
-                                    <h4 className="text-[15px] font-bold text-slate-800">원장님 종합 역량 등급의 포지션</h4>
-                                  </div>
-                                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex items-center justify-between gap-8 md:min-w-[280px]">
-                                    <div className="text-left space-y-0.5">
-                                      <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">진단 총점</span>
-                                      <span className="text-sm font-extrabold text-slate-800">{totalScore}점 <span className="text-slate-400 font-medium text-xs">/ {isBrand ? "40" : "30"}점</span></span>
-                                    </div>
-                                    <div className="w-px h-8 bg-slate-200"></div>
-                                    <div className="text-left space-y-0.5">
-                                      <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">종합 개원 역량 등급</span>
-                                      <span className="text-sm font-extrabold text-[#0B3B24]">{grade}등급 <span className="text-slate-400 font-bold text-xs">({activeSeg.label})</span></span>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="relative pt-12 pb-6 px-1">
-                                  {/* Floating PIN / Indicator pointing to the exact percentage position */}
-                                  <motion.div 
-                                    className="absolute top-0 z-20 flex flex-col items-center -translate-x-1/2"
-                                    style={{ left: `${positionPercent}%` }}
-                                    initial={{ scale: 0.5, opacity: 0 }}
-                                    animate={{ scale: 1, opacity: 1 }}
-                                    transition={{ type: "spring", stiffness: 100, damping: 15, delay: 0.2 }}
-                                  >
-                                    {/* Visual Marker Label */}
-                                    <div className="bg-[#0B3B24] text-white text-[11px] font-bold px-3 py-1.5 rounded-full shadow-md flex items-center gap-1.5 shrink-0 select-none border border-[#C5A059]/40 whitespace-nowrap">
-                                      <span className="w-2 h-2 rounded-full bg-[#10B981] animate-ping shrink-0" />
-                                      <span>원장님 위치: <strong className="text-[#C5A059] font-mono">{grade}등급</strong> ({totalScore}점)</span>
-                                    </div>
-                                    {/* Down arrow marker */}
-                                    <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-[#0B3B24] shadow-sm" />
-                                  </motion.div>
-
-                                  {/* The spectrum track */}
-                                  <div className="relative w-full h-4 bg-slate-100 rounded-full flex overflow-hidden shadow-inner border border-slate-200/50">
-                                    {segments.map((seg, idx) => {
-                                      const isActive = idx === activeSegmentIndex;
-                                      return (
-                                        <div 
-                                          key={seg.grade} 
-                                          className={`w-[20%] h-full relative transition-all duration-300 ${seg.bg} ${isActive ? 'brightness-105 saturate-125' : 'opacity-70 saturate-75'} flex items-center justify-center`}
-                                        >
-                                          {/* Fine border dividing line */}
-                                          {idx < 4 && <div className="absolute right-0 top-0 bottom-0 w-px bg-white/40" />}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-
-                                  {/* Segment markers/labels below the track */}
-                                  <div className="grid grid-cols-5 mt-4 sm:mt-5 text-center">
-                                    {segments.map((seg, idx) => {
-                                      const isActive = idx === activeSegmentIndex;
-                                      return (
-                                        <div key={seg.grade} className="flex flex-col items-center space-y-1 select-none">
-                                          {/* Grade Character Bubble */}
-                                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-extrabold ${isActive ? 'bg-[#0B3B24] text-white ring-2 ring-[#C5A059]/50 shadow-sm scale-110' : 'bg-slate-100 text-slate-500'} transition-all duration-300`}>
-                                            {seg.grade}
-                                          </div>
-                                          {/* Info and range */}
-                                          <span className={`text-[11px] font-bold tracking-tight block ${isActive ? 'text-[#0B3B24]' : 'text-slate-500'}`}>
-                                            {seg.label}
-                                          </span>
-                                          <span className="font-mono text-[10px] text-slate-400 font-medium block">
-                                            {seg.min}~{seg.max}점
-                                          </span>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })()}
                           </motion.div>
 
                           {/* If not admin, render basic information & secure lock notice, else the standard detailed view */}
                           {!isAdminAuthenticated ? (
                             <div className="space-y-6">
                               {/* [기본 기입 정보 (Profile Checklist)] */}
-                              <motion.div 
-                              initial={{ opacity: 0, y: 15 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ duration: 0.4, delay: 0.1 }}
-                              className="bg-white border border-[#E5E7EB] rounded-2xl p-6 sm:p-8 shadow-sm text-left"
-                            >
-                              <div className="border-b border-slate-100 pb-4 mb-5">
-                                <span className="text-[10px] tracking-[0.1em] text-[#C5A059] font-sans font-bold uppercase block">APPLICANT PROFILE CHECKLIST</span>
-                                <h3 className="text-[16px] font-bold text-slate-800 mt-0.5">예비 원장님 기본 기입 정보 목록</h3>
-                              </div>
-                              
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8 text-xs sm:text-sm">
-                                <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
-                                  <span className="text-slate-400 font-medium">성명 / 나이</span>
-                                  <span className="font-bold text-slate-800">{diagnosisResult.name} 원장님 ({diagnosisResult.birth ? `만 ${calculateKoreanAge(diagnosisResult.birth)}세` : ""})</span>
+                              <motion.div
+                                initial={{ opacity: 0, y: 15 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.4, delay: 0.1 }}
+                                className="bg-white border border-[#E5E7EB] rounded-2xl p-6 sm:p-8 shadow-sm text-left"
+                              >
+                                <div className="border-b border-slate-100 pb-4 mb-5">
+                                  <span className="text-[10px] tracking-[0.1em] text-[#C5A059] font-sans font-bold uppercase block">APPLICANT PROFILE CHECKLIST</span>
+                                  <h3 className="text-[16px] font-bold text-slate-800 mt-0.5">예비 원장님 기본 기입 정보 목록</h3>
                                 </div>
-                                <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
-                                  <span className="text-slate-400 font-medium">연락처</span>
-                                  <span className="font-bold text-slate-800 font-mono">{diagnosisResult.phone}</span>
-                                </div>
-                                <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
-                                  <span className="text-slate-400 font-medium">희망 개원지역</span>
-                                  <span className="font-bold text-[#0B3B24]">{diagnosisResult.region || "기재안함"}</span>
-                                </div>
-                                <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
-                                  <span className="text-slate-400 font-medium">개원 희망 시기</span>
-                                  <span className="font-bold text-[#0B3B24]">{diagnosisResult.openingMonth === "없음" ? "개원시기 미정" : `${diagnosisResult.openingMonth} 예정`}</span>
-                                </div>
-                                <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
-                                  <span className="text-slate-400 font-medium">가맹 유형</span>
-                                  <span className="font-bold text-[#C5A059]">{diagnosisResult.franchiseType}</span>
-                                </div>
-                                <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
-                                  <span className="text-slate-400 font-medium">운영 형태</span>
-                                  <span className="font-bold text-slate-800">{diagnosisResult.operationType}</span>
-                                </div>
-                                <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
-                                  <span className="text-slate-400 font-medium">전공 여부</span>
-                                  <span className="font-bold text-slate-800">{diagnosisResult.englishMajor}</span>
-                                </div>
-                                <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
-                                  <span className="text-slate-400 font-medium">영어 회화 실력</span>
-                                  <span className="font-bold text-slate-800">{diagnosisResult.englishSpeaking || "미기입"}</span>
-                                </div>
-                                <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
-                                  <span className="text-slate-400 font-medium">성향 유형</span>
-                                  <span className="font-bold text-slate-800">{diagnosisResult.personality}</span>
-                                </div>
-                                <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
-                                  <span className="text-slate-400 font-medium">유입 경로</span>
-                                  <span className="font-bold text-slate-800">{diagnosisResult.inflowRoute || "일반 유입"}</span>
-                                </div>
-                                <div className="md:col-span-2 flex flex-col pt-2 text-left">
-                                  <span className="text-slate-400 font-medium mb-1">메인 관심사 및 고민</span>
-                                  <div className="bg-slate-50 border border-slate-100 rounded-lg p-3 text-xs sm:text-sm text-slate-700 font-medium leading-relaxed font-sans min-h-[48px]">
-                                    {diagnosisResult.mainConcern || "작성된 내용이 없습니다."}
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8 text-xs sm:text-sm">
+                                  <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
+                                    <span className="text-slate-400 font-medium">성명 / 나이</span>
+                                    <span className="font-bold text-slate-800">{diagnosisResult.name} 원장님 ({diagnosisResult.birth ? `만 ${calculateKoreanAge(diagnosisResult.birth)}세` : ""})</span>
                                   </div>
-                                </div>
-
-
-
-                              </div>
-                            </motion.div>
-
-                            {/* [보안 안내 및 잠금 배너] */}
-                            <motion.div 
-                              initial={{ opacity: 0, y: 15 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ duration: 0.4, delay: 0.2 }}
-                              className="bg-slate-50 border border-slate-200 rounded-2xl p-6 sm:p-8 space-y-4 shadow-inner text-left" 
-                              id="client_only_restricted_info_banner"
-                            >
-                              <div className="flex items-center space-x-3 text-[#0B3B24]">
-                                <div className="w-10 h-10 rounded-full bg-[#0B3B24]/10 flex items-center justify-center border border-[#0B3B24]/20 shrink-0">
-                                  <Lock className="w-5 h-5 text-[#C5A059]" />
-                                </div>
-                                <div>
-                                  <h4 className="font-extrabold text-[#0B3B24] text-sm sm:text-base">상세 개원 처방정보 보안 잠금 안내</h4>
-                                  <p className="text-[10px] text-slate-400 font-sans mt-0.5">HEADQUARTERS SECURE DATABASE RECORDED</p>
-                                </div>
-                              </div>
-                              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium font-sans">
-                                원장님의 <b>8대 부문별 세부 심사 역량</b>, <b>개원 타당 특수 KPI 지표</b>, <b>주요 입지 및 상권 분석 소견</b>은 모두 본사 전용 관리자 데이터베이스 시스템에 안심 암호화되어 안전하게 기록 보관되었습니다.
-                              </p>
-                              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium font-sans">
-                                성공적인 영어 전문학원 창업 준비를 위해 본사 개원 매칭 심사처의 전임 담당관(컨설턴트: <b>{diagnosisResult.counselorName}</b>)이 기입해주신 연락처로 신속히 개별 통보 유선 상담을 드릴 예정입니다.
-                              </p>
-                              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium font-sans">
-                                유선 컨설팅 브리핑 과정을 통하여 원장님만을 위한 맞춤형 8대 세부 분석 및 핵심 추천입지, 단계별 가이드라인 로드맵의 세부 내용을 모두 상세하게 상담 받으실 수 있습니다.
-                              </p>
-                              
-                              <div className="pt-2 flex flex-col sm:flex-row gap-3 items-center">
-                                <button
-                                  type="button"
-                                  onClick={() => setView("home")}
-                                  className="w-full sm:w-auto h-12 px-6 rounded-lg bg-[#0B3B24] hover:bg-[#062919] text-white font-extrabold text-xs transition-colors cursor-pointer flex items-center justify-center space-x-1.5 border-0 font-sans"
-                                >
-                                  <ArrowLeft className="w-4 h-4 text-[#C5A059]" />
-                                  <span>진단 홈으로 가기</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={handleRequestConsultantInquiry}
-                                  disabled={submittingInquiry || diagnosisResult.consultantInquiryRequested}
-                                  className={`w-full sm:w-auto h-12 px-6 rounded-lg font-extrabold text-xs transition-all cursor-pointer flex items-center justify-center space-x-1.5 border-0 font-sans ${
-                                    diagnosisResult.consultantInquiryRequested
-                                      ? "bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/35 select-none cursor-default"
-                                      : "bg-[#C5A059] hover:bg-[#B38F48] text-white shadow-md hover:shadow-lg active:scale-95"
-                                  }`}
-                                >
-                                  {submittingInquiry ? (
-                                    <>
-                                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
-                                      <span>문의 접수 중...</span>
-                                    </>
-                                  ) : diagnosisResult.consultantInquiryRequested ? (
-                                    <>
-                                      <Check className="w-3.5 h-3.5 text-[#C5A059]" />
-                                      <span>✓ 컨설턴트 문의 접수됨</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <MessageSquare className="w-3.5 h-3.5" />
-                                      <span>컨설턴트 진단결과 문의</span>
-                                    </>
-                                  )}
-                                </button>
-                                
-                                <button
-                                  type="button"
-                                  onClick={handleDownloadPdfOrPrint}
-                                  disabled={isGeneratingPdf}
-                                  className="w-full sm:w-auto h-12 px-6 rounded-lg bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-extrabold text-xs transition-colors cursor-pointer flex items-center justify-center space-x-1.5 border-0 font-sans"
-                                >
-                                  {isGeneratingPdf ? (
-                                    <>
-                                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
-                                      <span>PDF 다운로드 중...</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Printer className="w-3.5 h-3.5" />
-                                      <span>기본정보/등급표 PDF 다운로드</span>
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-                            </motion.div>
-                          </div>
-                        ) : (
-                          <>
-                            {/* [핵심 지표 KPI 카드 또는 개선 및 강화 사항] */}
-                        {(() => {
-                          const isBrand = diagnosisResult.franchiseType === "브랜드 전환" || diagnosisResult.franchiseType === "브랜드전환";
-                          if (isBrand) {
-                            const answersList = diagnosisResult.answers || [3, 3, 3, 3, 3, 3, 3, 3];
-                            
-                            const getBrandQTopic = (idx: number): string => {
-                              switch(idx) {
-                                case 0: return "현재 운영 형태";
-                                case 1: return "현재 운영 공간 규모";
-                                case 2: return "현재 재원생 규모";
-                                case 3: return "영어학원 원장 경력";
-                                case 4: return "영어 수업 경력";
-                                case 5: return "브랜드 전환 가용 자본";
-                                case 6: return "소득분류";
-                                case 7: return "초등인원";
-                                default: return "상세 역량 평가";
-                               }
-                            };
-
-                            // Create an array of question indices [0..7] and sort descending by their score.
-                            const sortedIndices = [0, 1, 2, 3, 4, 5, 6, 7].sort((a, b) => {
-                              const scoreA = answersList[a] !== undefined ? answersList[a] : 3;
-                              const scoreB = answersList[b] !== undefined ? answersList[b] : 3;
-                              return scoreB - scoreA;
-                            });
-
-                            const strengthIndices = [sortedIndices[0], sortedIndices[1]];
-                            const improvementIndices = [sortedIndices[7], sortedIndices[6]]; // the two lowest
-
-                            const itemsToDisplay = [
-                              // Strength 1
-                              (() => {
-                                const qIdx = strengthIndices[0] !== undefined ? strengthIndices[0] : 0;
-                                const score = answersList[qIdx] !== undefined ? answersList[qIdx] : 3;
-                                const topicLabel = getBrandQTopic(qIdx);
-                                const feedback = resolveQuestionFeedback(diagnosisResult.franchiseType, qIdx, score);
-                                const selectedOptionText = brandQuestions[qIdx]?.options.find(o => o.value === score)?.text || `${score}점 수준`;
-                                return {
-                                  isStrength: score >= 4,
-                                  topic: topicLabel,
-                                  title: `${topicLabel} ${score >= 4 ? "우수" : score === 3 ? "준수" : "검토필요"}`,
-                                  desc: feedback.comment || "우수한 현재 운영 요건을 지니고 있어 브랜드 전환 시 강력한 시너지 창출이 예상됩니다.",
-                                  detail: `${selectedOptionText} (${score}점)`,
-                                  icon: score >= 4 ? "check" : "alert"
-                                };
-                              })(),
-                              // Strength 2
-                              (() => {
-                                const qIdx = strengthIndices[1] !== undefined ? strengthIndices[1] : 1;
-                                const score = answersList[qIdx] !== undefined ? answersList[qIdx] : 3;
-                                const topicLabel = getBrandQTopic(qIdx);
-                                const feedback = resolveQuestionFeedback(diagnosisResult.franchiseType, qIdx, score);
-                                const selectedOptionText = brandQuestions[qIdx]?.options.find(o => o.value === score)?.text || `${score}점 수준`;
-                                return {
-                                  isStrength: score >= 4,
-                                  topic: topicLabel,
-                                  title: `${topicLabel} ${score >= 4 ? "우수" : score === 3 ? "준수" : "검토필요"}`,
-                                  desc: feedback.comment || "풍부한 기초 자원과 높은 등급 요건으로 지역 내 프리미엄 브랜드 전개에 매끄럽게 안착 가능합니다.",
-                                  detail: `${selectedOptionText} (${score}점)`,
-                                  icon: score >= 4 ? "check" : "alert"
-                                };
-                              })(),
-                              // Weakness 1
-                              (() => {
-                                const qIdx = improvementIndices[0] !== undefined ? improvementIndices[0] : 7;
-                                const score = answersList[qIdx] !== undefined ? answersList[qIdx] : 3;
-                                const topicLabel = getBrandQTopic(qIdx);
-                                const feedback = resolveQuestionFeedback(diagnosisResult.franchiseType, qIdx, score);
-                                const selectedOptionText = brandQuestions[qIdx]?.options.find(o => o.value === score)?.text || `${score}점 수준`;
-                                return {
-                                  isStrength: score >= 4,
-                                  topic: topicLabel,
-                                  title: `${topicLabel} ${score >= 4 ? "우수" : score === 3 ? "준수" : "검토필요"}`,
-                                  desc: feedback.comment || "해당 분야의 리스크 요인을 억제하기 위해 본사 전담 솔루션 컨설팅 배정과 액션 아이템 설계가 시급합니다.",
-                                  detail: `${selectedOptionText} (${score}점)`,
-                                  icon: score >= 4 ? "check" : "alert"
-                                };
-                              })(),
-                              // Weakness 2
-                              (() => {
-                                const qIdx = improvementIndices[1] !== undefined ? improvementIndices[1] : 6;
-                                const score = answersList[qIdx] !== undefined ? answersList[qIdx] : 3;
-                                const topicLabel = getBrandQTopic(qIdx);
-                                const feedback = resolveQuestionFeedback(diagnosisResult.franchiseType, qIdx, score);
-                                const selectedOptionText = brandQuestions[qIdx]?.options.find(o => o.value === score)?.text || `${score}점 수준`;
-                                return {
-                                  isStrength: score >= 4,
-                                  topic: topicLabel,
-                                  title: `${topicLabel} ${score >= 4 ? "우수" : score === 3 ? "준수" : "검토필요"}`,
-                                  desc: feedback.comment || "본사 가동 시스템 보수 교육 전수 및 가이드라인 정독을 실행하여 운영 안전 마진을 선확보하십시오.",
-                                  detail: `${selectedOptionText} (${score}점)`,
-                                  icon: score >= 4 ? "check" : "alert"
-                                };
-                              })()
-                            ];
-
-                            return (
-                              <div className="space-y-10">
-                                <div className="space-y-6">
-                                  <div className="mb-4">
-                                    <span className="text-[11px] tracking-[0.1em] text-[#C5A059] font-sans uppercase block font-bold">BRAND SYSTEM UPGRADE</span>
-                                    <h3 className="text-[16px] font-bold text-slate-800 mt-0.5">브랜드 전환 핵심 개선 및 강화 사항</h3>
+                                  <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
+                                    <span className="text-slate-400 font-medium">연락처</span>
+                                    <span className="font-bold text-slate-800 font-mono">{diagnosisResult.phone}</span>
                                   </div>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="brand_switch_improvements">
-                                    {itemsToDisplay.map((item, itemIdx) => {
-                                      const isStr = item.isStrength;
-                                      return (
-                                        <div 
-                                          key={itemIdx} 
-                                          className={`bg-white border ${isStr ? 'border-emerald-100 hover:border-emerald-300' : 'border-rose-100 hover:border-rose-300'} rounded-xl p-5 shadow-sm transition-all duration-300 flex items-start gap-4 hover:-translate-y-0.5`}
-                                        >
-                                          {isStr ? (
-                                            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100 shadow-xs">
-                                              <CheckCircle2 className="w-5 h-5 shrink-0" />
-                                            </div>
-                                          ) : (
-                                            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center shrink-0 border border-rose-100 shadow-xs">
-                                              <AlertCircle className="w-5 h-5 shrink-0" />
-                                            </div>
-                                          )}
-                                          <div className="space-y-1 flex-1 text-left">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                              <span className={`text-[10px] font-bold uppercase tracking-wider block px-1.5 py-0.5 rounded ${isStr ? 'text-emerald-700 bg-emerald-50' : 'text-rose-600 bg-rose-50'}`}>
-                                                {isStr ? "핵심 강점" : "우선 보완 과제"}
-                                              </span>
-                                              <span className="text-[11px] font-mono font-bold text-slate-400">
-                                                {item.detail}
-                                              </span>
-                                            </div>
-                                            <h4 className="font-extrabold text-slate-800 text-sm leading-normal">{item.title}</h4>
-                                            <p className="text-xs text-slate-600 font-medium leading-relaxed font-sans pt-1">
-                                              {item.desc}
-                                            </p>
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
+                                  <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
+                                    <span className="text-slate-400 font-medium">희망 개원지역</span>
+                                    <span className="font-bold text-[#0B3B24]">{diagnosisResult.region || "기재안함"}</span>
                                   </div>
-                                </div>
-
-                                <div className="border-t border-slate-100 pt-8">
-                                  <div className="mb-4">
-                                    <span className="text-[11px] tracking-[0.1em] text-slate-400 font-sans uppercase block">COMPETENCY KEYMETRICS</span>
-                                    <h3 className="text-[16px] font-medium text-slate-800 mt-0.5">다차원 개원 타당 지표 (핵심 KPI)</h3>
+                                  <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
+                                    <span className="text-slate-400 font-medium">개원 희망 시기</span>
+                                    <span className="font-bold text-[#0B3B24]">{diagnosisResult.openingMonth === "없음" ? "개원시기 미정" : `${diagnosisResult.openingMonth} 예정`}</span>
                                   </div>
-                                  
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6" id="kpi_grid_holder_brand">
-                                    {[
-                                      { label: "추천 개원 형태", value: diagnosisResultAnalysis?.capitalRec || "내실 위주 주거단지 거점형 영어 학원", desc: "분석에 따른 최적 개설 가맹 타입" },
-                                      { label: "추천 개원 규모", value: diagnosisResultAnalysis?.capitalRecSize || "중소형 규모 (18~25평형권)", desc: "지역 평형별 가성비 등 공간 규격" },
-                                      { label: "추천 상권 구역", value: diagnosisResultAnalysis?.recRegions[0] || "안정형 배후 항아리 상권", desc: "도보 이동 및 배후 세대 밀집도" },
-                                      { label: "개원 추천 시기", value: diagnosisResultAnalysis?.recOpeningMonth || (diagnosisResult.openingMonth === "없음" ? "개원시기 미정" : `${diagnosisResult.openingMonth} 예정`), desc: "성향과 준비도 기준 본사 추천 개원 시기" },
-                                      { label: "개원 인력 구성", value: diagnosisResultAnalysis?.recStaffSetup[0] || "원장 직강형 구성", desc: "원장 경력을 연동한 구성 배점" },
-                                      { label: "현재 가용 예산 범위", value: (() => {
-                                        const val = diagnosisResultAnalysis?.capitalLevel || 3;
-                                        const isBrand = diagnosisResult.franchiseType === "브랜드 전환" || diagnosisResult.franchiseType === "브랜드전환";
-                                        if (isBrand) {
-                                          if (val === 1) return "1,000만원 미만";
-                                          if (val === 2) return "1,000만원 ~ 3,000만원";
-                                          if (val === 3) return "3,000만원 ~ 5,000만원";
-                                          if (val === 4) return "5,000만원 ~ 7,000만원";
-                                          return "7,000만원 이상";
-                                        } else {
-                                          if (val === 1) return "5,000만원 미만";
-                                          if (val === 2) return "5,000만원 ~ 1억원";
-                                          if (val === 3) return "1억원 ~ 1억5천만원";
-                                          if (val === 4) return "1억5천만원 ~ 2억원";
-                                          return "2억원 이상";
-                                        }
-                                      })(), desc: "자가 진단 기입 기준 가용 예산 범위" }
-                                    ].map((kpi, i) => (
-                                      <div key={i} className="bg-white border border-[#E5E7EB] rounded-xl p-5 shadow-sm hover:border-[#C5A059] transition-colors">
-                                        <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">{kpi.label}</span>
-                                        <span className="font-extrabold text-slate-800 text-sm sm:text-[15px] block mt-1.5 leading-normal">{kpi.value}</span>
-                                        <span className="text-[11px] text-slate-400 block mt-2 font-medium">{kpi.desc}</span>
-                                      </div>
-                                    ))}
+                                  <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
+                                    <span className="text-slate-400 font-medium">가맹 유형</span>
+                                    <span className="font-bold text-[#C5A059]">{diagnosisResult.franchiseType}</span>
                                   </div>
-                                </div>
-                              </div>
-                            );
-                          } else {
-                            const answers = diagnosisResult.answers || [3, 3, 3, 3, 3, 3];
-                            const expVal = answers[0] || 1; // Q1: "원장 경력이 있나요?"
-                            const budgetVal = answers[2] || 1; // Q3: "현재 창업 가능 자본은 어느 정도인가요?"
-
-                            // Calculate the core KPI parameters based on experience and budget
-                            let spaceSize = "30평 미만";
-                            let recRegion = "신도시 외곽 / 경쟁 약한 학군";
-                            let staffSetup = "교수부장 또는 상담실장";
-                            let prepPeriod = "4~6개월";
-
-                            if (expVal <= 2) {
-                              // 초등영어학원 1년 미만
-                              if (budgetVal <= 2) {
-                                spaceSize = "30평 미만";
-                                recRegion = "신도시 외곽 / 경쟁 약한 학군";
-                                staffSetup = "교수부장 또는 상담실장";
-                                prepPeriod = "4~6개월";
-                              } else if (budgetVal === 3) {
-                                spaceSize = "30평 미만";
-                                recRegion = "중소도시 중심상권";
-                                staffSetup = "교수부장 또는 상담실장";
-                                prepPeriod = "4~6개월";
-                              } else if (budgetVal === 4) {
-                                spaceSize = "30~40평";
-                                recRegion = "신규 택지지구";
-                                staffSetup = "교수부장 또는 상담실장";
-                                prepPeriod = "4~6개월";
-                              } else { // budgetVal >= 5
-                                spaceSize = "30~40평";
-                                recRegion = "준학군지 (초등 밀집지역)";
-                                staffSetup = "교수부장 또는 상담실장";
-                                prepPeriod = "4~6개월";
-                              }
-                            } else if (expVal === 3) {
-                              // 초등영어학원 1~3년
-                              if (budgetVal <= 2) {
-                                spaceSize = "30평 미만";
-                                recRegion = "구도심 학군지";
-                                staffSetup = "교수부장급 강사";
-                                prepPeriod = "3~4개월";
-                              } else if (budgetVal === 3) {
-                                spaceSize = "40~50평";
-                                recRegion = "초등학교 인접 상권";
-                                staffSetup = "교수부장급 강사";
-                                prepPeriod = "3~4개월";
-                              } else if (budgetVal === 4) {
-                                spaceSize = "40~50평";
-                                recRegion = "브랜드 약한 학원 밀집지역";
-                                staffSetup = "교수부장급 강사";
-                                prepPeriod = "3~4개월";
-                              } else {
-                                spaceSize = "40~50평";
-                                recRegion = "준프리미엄 학군";
-                                staffSetup = "교수부장급 강사";
-                                prepPeriod = "3~4개월";
-                              }
-                            } else if (expVal === 4) {
-                              // 초등영어학원 3년 이상
-                              if (budgetVal <= 2) {
-                                spaceSize = "30평 미만";
-                                recRegion = "틈새 학군지";
-                                staffSetup = "경험있는 강사";
-                                prepPeriod = "2~3개월";
-                              } else if (budgetVal === 3) {
-                                spaceSize = "40~50평";
-                                recRegion = "중형 학군 중심상권";
-                                staffSetup = "경험있는 강사";
-                                prepPeriod = "2~3개월";
-                              } else if (budgetVal === 4) {
-                                spaceSize = "60평 이상";
-                                recRegion = "프리미엄 학군지";
-                                staffSetup = "경험있는 강사";
-                                prepPeriod = "2~3개월";
-                              } else {
-                                spaceSize = "60평 이상";
-                                recRegion = "대형 브랜드 경쟁지역";
-                                staffSetup = "경험있는 강사";
-                                prepPeriod = "2~3개월";
-                              }
-                            } else { // expVal >= 5
-                              // 초등학원 운영
-                              if (budgetVal <= 2) {
-                                spaceSize = "30평 미만";
-                                recRegion = "저경쟁 지역";
-                                staffSetup = "경험있는 강사";
-                                prepPeriod = "2~3개월";
-                              } else if (budgetVal === 3) {
-                                spaceSize = "40~50평";
-                                recRegion = "초등 밀집 주거지역";
-                                staffSetup = "경험있는 강사";
-                                prepPeriod = "2~3개월";
-                              } else if (budgetVal === 4) {
-                                spaceSize = "60평 이상";
-                                recRegion = "학원 상권 형성지역";
-                                staffSetup = "경험있는 강사";
-                                prepPeriod = "2~3개월";
-                              } else {
-                                spaceSize = "60평 이상";
-                                recRegion = "핵심 학군지";
-                                staffSetup = "경험있는 강사";
-                                prepPeriod = "2~3개월";
-                              }
-                            }
-
-                            return (
-                              <div>
-                                <div className="mb-4">
-                                  <span className="text-[11px] tracking-[0.1em] text-slate-400 font-sans uppercase block">COMPETENCY KEYMETRICS</span>
-                                  <h3 className="text-[16px] font-medium text-slate-800 mt-0.5">다차원 개원 타당 지표 (핵심 KPI)</h3>
-                                </div>
-                                
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" id="kpi_grid_holder_new">
-                                  {[
-                                    { label: "추천 공간규모", value: spaceSize, desc: "원장 경력 및 자금 규격 맞춤 면적" },
-                                    { label: "추천지역", value: recRegion, desc: "경쟁 정합성에 맞춘 입지 추천" },
-                                    { label: "인력구성", value: staffSetup, desc: "경력 단계별 최적 행정/교수 팀빌딩" },
-                                    { label: "개원준비 기간", value: prepPeriod, desc: "경향성에 비춘 최적 개설 소요 예상 기간" }
-                                  ].map((kpi, i) => (
-                                    <div key={i} className="bg-white border border-[#E5E7EB] rounded-xl p-5 shadow-sm hover:border-[#C5A059] transition-colors">
-                                      <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">{kpi.label}</span>
-                                      <span className="font-extrabold text-[#0B3B24] text-sm sm:text-[15px] block mt-1.5 leading-normal">{kpi.value}</span>
-                                      <span className="text-[11px] text-slate-400 block mt-2 font-medium">{kpi.desc}</span>
+                                  <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
+                                    <span className="text-slate-400 font-medium">운영 형태</span>
+                                    <span className="font-bold text-slate-800">{diagnosisResult.operationType}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
+                                    <span className="text-slate-400 font-medium">전공 여부</span>
+                                    <span className="font-bold text-slate-800">{diagnosisResult.englishMajor}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
+                                    <span className="text-slate-400 font-medium">영어 회화 실력</span>
+                                    <span className="font-bold text-slate-800">{diagnosisResult.englishSpeaking || "미기입"}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
+                                    <span className="text-slate-400 font-medium">성향 유형</span>
+                                    <span className="font-bold text-slate-800">{diagnosisResult.personality}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
+                                    <span className="text-slate-400 font-medium">유입 경로</span>
+                                    <span className="font-bold text-slate-800">{diagnosisResult.inflowRoute || "일반 유입"}</span>
+                                  </div>
+                                  <div className="md:col-span-2 flex flex-col pt-2 text-left">
+                                    <span className="text-slate-400 font-medium mb-1">메인 관심사 및 고민</span>
+                                    <div className="bg-slate-50 border border-slate-100 rounded-lg p-3 text-xs sm:text-sm text-slate-700 font-medium leading-relaxed font-sans min-h-[48px]">
+                                      {diagnosisResult.mainConcern || "작성된 내용이 없습니다."}
                                     </div>
-                                  ))}
+                                  </div>
+
+
+
                                 </div>
-                              </div>
-                            );
-                          }
-                        })()}
+                              </motion.div>
 
-                        {/* [항목별 진단 그래프 (가로 바 차트)] */}
-                        <div>
-                          <div className="mb-4 flex flex-col md:flex-row md:items-end justify-between gap-3">
-                            <div>
-                              <span className="text-[11px] tracking-[0.1em] text-slate-400 font-sans uppercase block">METRICS HORIZONTAL BARS</span>
-                              <h3 className="text-[16px] font-medium text-slate-800 mt-0.5">부문별 자가 역량 스코어 진단 그래프 (8대 영역)</h3>
-                            </div>
-                            
-                            <div className="flex flex-wrap items-center gap-3 text-[11px] font-bold">
-                              <span className="text-slate-400 font-mono">* 5점 만족 척도</span>
-                              <div className="flex items-center gap-3 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-                                <span className="flex items-center gap-1.5 text-emerald-600">
-                                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                                  초록=양호
-                                </span>
-                                <span className="flex items-center gap-1.5 text-amber-600">
-                                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                                  주황=보통
-                                </span>
-                                <span className="flex items-center gap-1.5 text-rose-500">
-                                  <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
-                                  빨강=위험
-                                </span>
-                              </div>
-                            </div>
-                          </div>
+                              {/* [보안 안내 및 잠금 배너] */}
+                              <motion.div
+                                initial={{ opacity: 0, y: 15 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.4, delay: 0.2 }}
+                                className="bg-slate-50 border border-slate-200 rounded-2xl p-6 sm:p-8 space-y-4 shadow-inner text-left"
+                                id="client_only_restricted_info_banner"
+                              >
+                                <div className="flex items-center space-x-3 text-[#0B3B24]">
+                                  <div className="w-10 h-10 rounded-full bg-[#0B3B24]/10 flex items-center justify-center border border-[#0B3B24]/20 shrink-0">
+                                    <Lock className="w-5 h-5 text-[#C5A059]" />
+                                  </div>
+                                  <div>
+                                    <h4 className="font-extrabold text-[#0B3B24] text-sm sm:text-base">상세 개원 처방정보 보안 잠금 안내</h4>
+                                    <p className="text-[10px] text-slate-400 font-sans mt-0.5">HEADQUARTERS SECURE DATABASE RECORDED</p>
+                                  </div>
+                                </div>
+                                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium font-sans">
+                                  원장님의 <b>8대 부문별 세부 심사 역량</b>, <b>개원 타당 특수 KPI 지표</b>, <b>주요 입지 및 상권 분석 소견</b>은 모두 본사 전용 관리자 데이터베이스 시스템에 안심 암호화되어 안전하게 기록 보관되었습니다.
+                                </p>
+                                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium font-sans">
+                                  성공적인 영어 전문학원 창업 준비를 위해 본사 개원 매칭 심사처의 전임 담당관(컨설턴트: <b>{diagnosisResult.counselorName}</b>)이 기입해주신 연락처로 신속히 개별 통보 유선 상담을 드릴 예정입니다.
+                                </p>
+                                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium font-sans">
+                                  유선 컨설팅 브리핑 과정을 통하여 원장님만을 위한 맞춤형 8대 세부 분석 및 핵심 추천입지, 단계별 가이드라인 로드맵의 세부 내용을 모두 상세하게 상담 받으실 수 있습니다.
+                                </p>
 
-                          <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-5 shadow-sm space-y-1.5" id="bars_diagnosis_chart">
-                            {(() => {
-                              const isBrand = diagnosisResult.franchiseType === "브랜드 전환" || diagnosisResult.franchiseType === "브랜드전환";
-                              const categoriesList = isBrand 
-                                ? [
-                                    { qIdx: 0, label: "운영 형태" },
-                                    { qIdx: 1, label: "원내 공간" },
-                                    { qIdx: 2, label: "기존 원생" },
-                                    { qIdx: 3, label: "원장 경력" },
-                                    { qIdx: 4, label: "영어 교수" },
-                                    { qIdx: 5, label: "투자 가용" },
-                                    { qIdx: 6, label: "소득분류" },
-                                    { qIdx: 7, label: "초등인원" }
-                                  ]
-                                : [
-                                    { qIdx: 0, label: "원장 경영" },
-                                    { qIdx: 1, label: "영어 교수" },
-                                    { qIdx: 2, label: "자본 준비" },
-                                    { qIdx: 3, label: "상담 역량" },
-                                    { qIdx: 4, label: "학사 행정" },
-                                    { qIdx: 5, label: "조직 관리" }
+                                <div className="pt-2 flex flex-col sm:flex-row gap-3 items-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => setView("home")}
+                                    className="w-full sm:w-auto h-12 px-6 rounded-lg bg-[#0B3B24] hover:bg-[#062919] text-white font-extrabold text-xs transition-colors cursor-pointer flex items-center justify-center space-x-1.5 border-0 font-sans"
+                                  >
+                                    <ArrowLeft className="w-4 h-4 text-[#C5A059]" />
+                                    <span>진단 홈으로 가기</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={handleRequestConsultantInquiry}
+                                    disabled={submittingInquiry || diagnosisResult.consultantInquiryRequested}
+                                    className={`w-full sm:w-auto h-12 px-6 rounded-lg font-extrabold text-xs transition-all cursor-pointer flex items-center justify-center space-x-1.5 border-0 font-sans ${diagnosisResult.consultantInquiryRequested
+                                        ? "bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/35 select-none cursor-default"
+                                        : "bg-[#C5A059] hover:bg-[#B38F48] text-white shadow-md hover:shadow-lg active:scale-95"
+                                      }`}
+                                  >
+                                    {submittingInquiry ? (
+                                      <>
+                                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                                        <span>문의 접수 중...</span>
+                                      </>
+                                    ) : diagnosisResult.consultantInquiryRequested ? (
+                                      <>
+                                        <Check className="w-3.5 h-3.5 text-[#C5A059]" />
+                                        <span>✓ 컨설턴트 문의 접수됨</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <MessageSquare className="w-3.5 h-3.5" />
+                                        <span>컨설턴트 진단결과 문의</span>
+                                      </>
+                                    )}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={handleDownloadPdfOrPrint}
+                                    disabled={isGeneratingPdf}
+                                    className="w-full sm:w-auto h-12 px-6 rounded-lg bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-extrabold text-xs transition-colors cursor-pointer flex items-center justify-center space-x-1.5 border-0 font-sans"
+                                  >
+                                    {isGeneratingPdf ? (
+                                      <>
+                                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                                        <span>PDF 다운로드 중...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Printer className="w-3.5 h-3.5" />
+                                        <span>기본정보/등급표 PDF 다운로드</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              </motion.div>
+                            </div>
+                          ) : (
+                            <>
+                              {/* [핵심 지표 KPI 카드 또는 개선 및 강화 사항] */}
+                              {(() => {
+                                const isBrand = diagnosisResult.franchiseType === "브랜드 전환" || diagnosisResult.franchiseType === "브랜드전환";
+                                if (isBrand) {
+                                  const answersList = diagnosisResult.answers || [3, 3, 3, 3, 3, 3, 3, 3];
+
+                                  const getBrandQTopic = (idx: number): string => {
+                                    switch (idx) {
+                                      case 0: return "현재 운영 형태";
+                                      case 1: return "현재 운영 공간 규모";
+                                      case 2: return "현재 재원생 규모";
+                                      case 3: return "영어학원 원장 경력";
+                                      case 4: return "영어 수업 경력";
+                                      case 5: return "브랜드 전환 가용 자본";
+                                      case 6: return "소득분류";
+                                      case 7: return "초등인원";
+                                      default: return "상세 역량 평가";
+                                    }
+                                  };
+
+                                  // Create an array of question indices [0..7] and sort descending by their score.
+                                  const sortedIndices = [0, 1, 2, 3, 4, 5, 6, 7].sort((a, b) => {
+                                    const scoreA = answersList[a] !== undefined ? answersList[a] : 3;
+                                    const scoreB = answersList[b] !== undefined ? answersList[b] : 3;
+                                    return scoreB - scoreA;
+                                  });
+
+                                  const strengthIndices = [sortedIndices[0], sortedIndices[1]];
+                                  const improvementIndices = [sortedIndices[7], sortedIndices[6]]; // the two lowest
+
+                                  const itemsToDisplay = [
+                                    // Strength 1
+                                    (() => {
+                                      const qIdx = strengthIndices[0] !== undefined ? strengthIndices[0] : 0;
+                                      const score = answersList[qIdx] !== undefined ? answersList[qIdx] : 3;
+                                      const topicLabel = getBrandQTopic(qIdx);
+                                      const feedback = resolveQuestionFeedback(diagnosisResult.franchiseType, qIdx, score);
+                                      const selectedOptionText = brandQuestions[qIdx]?.options.find(o => o.value === score)?.text || `${score}점 수준`;
+                                      return {
+                                        isStrength: score >= 4,
+                                        topic: topicLabel,
+                                        title: `${topicLabel} ${score >= 4 ? "우수" : score === 3 ? "준수" : "검토필요"}`,
+                                        desc: feedback.comment || "우수한 현재 운영 요건을 지니고 있어 브랜드 전환 시 강력한 시너지 창출이 예상됩니다.",
+                                        detail: `${selectedOptionText} (${score}점)`,
+                                        icon: score >= 4 ? "check" : "alert"
+                                      };
+                                    })(),
+                                    // Strength 2
+                                    (() => {
+                                      const qIdx = strengthIndices[1] !== undefined ? strengthIndices[1] : 1;
+                                      const score = answersList[qIdx] !== undefined ? answersList[qIdx] : 3;
+                                      const topicLabel = getBrandQTopic(qIdx);
+                                      const feedback = resolveQuestionFeedback(diagnosisResult.franchiseType, qIdx, score);
+                                      const selectedOptionText = brandQuestions[qIdx]?.options.find(o => o.value === score)?.text || `${score}점 수준`;
+                                      return {
+                                        isStrength: score >= 4,
+                                        topic: topicLabel,
+                                        title: `${topicLabel} ${score >= 4 ? "우수" : score === 3 ? "준수" : "검토필요"}`,
+                                        desc: feedback.comment || "풍부한 기초 자원과 높은 등급 요건으로 지역 내 프리미엄 브랜드 전개에 매끄럽게 안착 가능합니다.",
+                                        detail: `${selectedOptionText} (${score}점)`,
+                                        icon: score >= 4 ? "check" : "alert"
+                                      };
+                                    })(),
+                                    // Weakness 1
+                                    (() => {
+                                      const qIdx = improvementIndices[0] !== undefined ? improvementIndices[0] : 7;
+                                      const score = answersList[qIdx] !== undefined ? answersList[qIdx] : 3;
+                                      const topicLabel = getBrandQTopic(qIdx);
+                                      const feedback = resolveQuestionFeedback(diagnosisResult.franchiseType, qIdx, score);
+                                      const selectedOptionText = brandQuestions[qIdx]?.options.find(o => o.value === score)?.text || `${score}점 수준`;
+                                      return {
+                                        isStrength: score >= 4,
+                                        topic: topicLabel,
+                                        title: `${topicLabel} ${score >= 4 ? "우수" : score === 3 ? "준수" : "검토필요"}`,
+                                        desc: feedback.comment || "해당 분야의 리스크 요인을 억제하기 위해 본사 전담 솔루션 컨설팅 배정과 액션 아이템 설계가 시급합니다.",
+                                        detail: `${selectedOptionText} (${score}점)`,
+                                        icon: score >= 4 ? "check" : "alert"
+                                      };
+                                    })(),
+                                    // Weakness 2
+                                    (() => {
+                                      const qIdx = improvementIndices[1] !== undefined ? improvementIndices[1] : 6;
+                                      const score = answersList[qIdx] !== undefined ? answersList[qIdx] : 3;
+                                      const topicLabel = getBrandQTopic(qIdx);
+                                      const feedback = resolveQuestionFeedback(diagnosisResult.franchiseType, qIdx, score);
+                                      const selectedOptionText = brandQuestions[qIdx]?.options.find(o => o.value === score)?.text || `${score}점 수준`;
+                                      return {
+                                        isStrength: score >= 4,
+                                        topic: topicLabel,
+                                        title: `${topicLabel} ${score >= 4 ? "우수" : score === 3 ? "준수" : "검토필요"}`,
+                                        desc: feedback.comment || "본사 가동 시스템 보수 교육 전수 및 가이드라인 정독을 실행하여 운영 안전 마진을 선확보하십시오.",
+                                        detail: `${selectedOptionText} (${score}점)`,
+                                        icon: score >= 4 ? "check" : "alert"
+                                      };
+                                    })()
                                   ];
 
-                              return categoriesList.map((cat, idx) => {
-                                const score = diagnosisResult.answers[cat.qIdx] || 3;
-                                const feedback = resolveQuestionFeedback(diagnosisResult.franchiseType, cat.qIdx, score);
-                                const bulletColor = score >= 4 ? "bg-emerald-500" : score === 3 ? "bg-orange-500" : "bg-red-500";
-                                const textColor = score >= 4 ? "text-emerald-600" : score === 3 ? "text-orange-600" : "text-red-500";
-                                
-                                const isExpanded = !!expandedCategories[cat.label];
-                                const toggleExpand = () => {
-                                  setExpandedCategories(prev => ({
-                                    ...prev,
-                                    [cat.label]: !prev[cat.label]
-                                  }));
-                                };
-
-                                return (
-                                  <div key={idx} className="border-b border-slate-100 last:border-0 py-1.5">
-                                    <div 
-                                      className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-2 rounded-lg cursor-pointer hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-all duration-150 select-none"
-                                      onClick={toggleExpand}
-                                    >
-                                      
-                                      {/* Left visual label - Stacked cleanly for bullet/title vertical consistency */}
-                                      <div className="w-full md:w-44 flex flex-col justify-center shrink-0">
-                                        <div className="flex items-center space-x-2">
-                                          <span className={`w-2 h-2 rounded-full shrink-0 ${bulletColor}`} />
-                                          <span className="text-xs sm:text-sm font-extrabold text-slate-700 leading-none">{cat.label}</span>
+                                  return (
+                                    <div className="space-y-10">
+                                      <div className="space-y-6">
+                                        <div className="mb-4">
+                                          <span className="text-[11px] tracking-[0.1em] text-[#C5A059] font-sans uppercase block font-bold">BRAND SYSTEM UPGRADE</span>
+                                          <h3 className="text-[16px] font-bold text-slate-800 mt-0.5">브랜드 전환 핵심 개선 및 강화 사항</h3>
                                         </div>
-                                        <span className="text-[10px] text-slate-400 font-semibold block mt-1.5 ml-4 truncate max-w-[150px]" title={feedback.scoreText}>
-                                          {feedback.scoreText}
-                                        </span>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="brand_switch_improvements">
+                                          {itemsToDisplay.map((item, itemIdx) => {
+                                            const isStr = item.isStrength;
+                                            return (
+                                              <div
+                                                key={itemIdx}
+                                                className={`bg-white border ${isStr ? 'border-emerald-100 hover:border-emerald-300' : 'border-rose-100 hover:border-rose-300'} rounded-xl p-5 shadow-sm transition-all duration-300 flex items-start gap-4 hover:-translate-y-0.5`}
+                                              >
+                                                {isStr ? (
+                                                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100 shadow-xs">
+                                                    <CheckCircle2 className="w-5 h-5 shrink-0" />
+                                                  </div>
+                                                ) : (
+                                                  <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center shrink-0 border border-rose-100 shadow-xs">
+                                                    <AlertCircle className="w-5 h-5 shrink-0" />
+                                                  </div>
+                                                )}
+                                                <div className="space-y-1 flex-1 text-left">
+                                                  <div className="flex flex-wrap items-center gap-2">
+                                                    <span className={`text-[10px] font-bold uppercase tracking-wider block px-1.5 py-0.5 rounded ${isStr ? 'text-emerald-700 bg-emerald-50' : 'text-rose-600 bg-rose-50'}`}>
+                                                      {isStr ? "핵심 강점" : "우선 보완 과제"}
+                                                    </span>
+                                                    <span className="text-[11px] font-mono font-bold text-slate-400">
+                                                      {item.detail}
+                                                    </span>
+                                                  </div>
+                                                  <h4 className="font-extrabold text-slate-800 text-sm leading-normal">{item.title}</h4>
+                                                  <p className="text-xs text-slate-600 font-medium leading-relaxed font-sans pt-1">
+                                                    {item.desc}
+                                                  </p>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
                                       </div>
-                                      
-                                      {/* Middle Progress slots */}
-                                      <div className="flex-1 flex items-center space-x-2 max-w-sm shrink-0">
-                                        <div className="flex-1 flex items-center space-x-1">
-                                          {[1, 2, 3, 4, 5].map((step) => (
-                                            <div 
-                                              key={step} 
-                                              className={`h-3.5 flex-1 rounded transition-colors duration-150 ${
-                                                step <= score 
-                                                  ? bulletColor 
-                                                  : "bg-slate-100/80"
-                                              }`} 
-                                            />
+
+                                      <div className="border-t border-slate-100 pt-8">
+                                        <div className="mb-4">
+                                          <span className="text-[11px] tracking-[0.1em] text-slate-400 font-sans uppercase block">COMPETENCY KEYMETRICS</span>
+                                          <h3 className="text-[16px] font-medium text-slate-800 mt-0.5">다차원 개원 타당 지표 (핵심 KPI)</h3>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6" id="kpi_grid_holder_brand">
+                                          {[
+                                            { label: "추천 개원 형태", value: diagnosisResultAnalysis?.capitalRec || "내실 위주 주거단지 거점형 영어 학원", desc: "분석에 따른 최적 개설 가맹 타입" },
+                                            { label: "추천 개원 규모", value: diagnosisResultAnalysis?.capitalRecSize || "중소형 규모 (18~25평형권)", desc: "지역 평형별 가성비 등 공간 규격" },
+                                            { label: "추천 상권 구역", value: diagnosisResultAnalysis?.recRegions[0] || "안정형 배후 항아리 상권", desc: "도보 이동 및 배후 세대 밀집도" },
+                                            { label: "개원 추천 시기", value: diagnosisResultAnalysis?.recOpeningMonth || (diagnosisResult.openingMonth === "없음" ? "개원시기 미정" : `${diagnosisResult.openingMonth} 예정`), desc: "성향과 준비도 기준 본사 추천 개원 시기" },
+                                            { label: "개원 인력 구성", value: diagnosisResultAnalysis?.recStaffSetup[0] || "원장 직강형 구성", desc: "원장 경력을 연동한 구성 배점" },
+                                            {
+                                              label: "현재 가용 예산 범위", value: (() => {
+                                                const val = diagnosisResultAnalysis?.capitalLevel || 3;
+                                                const isBrand = diagnosisResult.franchiseType === "브랜드 전환" || diagnosisResult.franchiseType === "브랜드전환";
+                                                if (isBrand) {
+                                                  if (val === 1) return "1,000만원 미만";
+                                                  if (val === 2) return "1,000만원 ~ 3,000만원";
+                                                  if (val === 3) return "3,000만원 ~ 5,000만원";
+                                                  if (val === 4) return "5,000만원 ~ 7,000만원";
+                                                  return "7,000만원 이상";
+                                                } else {
+                                                  if (val === 1) return "5,000만원 미만";
+                                                  if (val === 2) return "5,000만원 ~ 1억원";
+                                                  if (val === 3) return "1억원 ~ 1억5천만원";
+                                                  if (val === 4) return "1억5천만원 ~ 2억원";
+                                                  return "2억원 이상";
+                                                }
+                                              })(), desc: "자가 진단 기입 기준 가용 예산 범위"
+                                            }
+                                          ].map((kpi, i) => (
+                                            <div key={i} className="bg-white border border-[#E5E7EB] rounded-xl p-5 shadow-sm hover:border-[#C5A059] transition-colors">
+                                              <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">{kpi.label}</span>
+                                              <span className="font-extrabold text-slate-800 text-sm sm:text-[15px] block mt-1.5 leading-normal">{kpi.value}</span>
+                                              <span className="text-[11px] text-slate-400 block mt-2 font-medium">{kpi.desc}</span>
+                                            </div>
                                           ))}
                                         </div>
-                                        
-                                        {/* Dynamic Score Badge with Indicator */}
-                                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-black border shrink-0 ${
-                                          score >= 4 
-                                            ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                                            : score === 3 
-                                              ? "bg-amber-50 text-amber-700 border-amber-200" 
-                                              : "bg-rose-50 text-rose-700 border-rose-200"
-                                        }`}>
-                                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${score >= 4 ? "bg-emerald-500" : score === 3 ? "bg-amber-500" : "bg-rose-500"}`} />
-                                          {score} / 5
-                                        </span>
-                                      </div>
-
-                                      {/* Right comments with truncated or click-to-expand */}
-                                      <div className="flex-1 flex items-center justify-between gap-3 min-w-0 md:pl-4">
-                                        <p className="text-slate-500 text-xs leading-relaxed truncate max-w-[320px] md:max-w-md">
-                                          {feedback.comment}
-                                        </p>
-                                        
-                                        <div className="flex items-center space-x-1 shrink-0 text-[10px] font-black text-[#C5A059] bg-[#C5A059]/10 rounded-md px-2 py-1 hover:bg-[#C5A059]/20 transition-all">
-                                          <span>{isExpanded ? "접기" : "자세히 보기"}</span>
-                                          <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? "rotate-180" : "rotate-0"}`} />
-                                        </div>
                                       </div>
                                     </div>
+                                  );
+                                } else {
+                                  const answers = diagnosisResult.answers || [3, 3, 3, 3, 3, 3];
+                                  const expVal = answers[0] || 1; // Q1: "원장 경력이 있나요?"
+                                  const budgetVal = answers[2] || 1; // Q3: "현재 창업 가능 자본은 어느 정도인가요?"
 
-                                    {/* Detailed Accordion/Expendable feedback panel */}
-                                    {isExpanded && (
-                                      <div 
-                                        className={`mt-1.5 ml-4 md:ml-6 p-4 rounded-xl border text-xs leading-relaxed transition-all duration-300 ${
-                                          score >= 4 
-                                            ? "bg-emerald-50/50 border-emerald-100 text-slate-700" 
-                                            : score === 3 
-                                              ? "bg-amber-50/50 border-amber-100 text-slate-700" 
-                                              : "bg-rose-50/50 border-rose-100 text-slate-700"
-                                        }`}
-                                      >
-                                        <div className="font-extrabold text-[#0B3B24] mb-1.5 flex items-center gap-1">
-                                          <Sparkles className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
-                                          <span>오프닝맵 전문가 밀착 정밀 처방 의견</span>
-                                          <span className={`ml-2 text-[10px] px-1.5 py-0.2 rounded font-black border ${
-                                            score >= 4 
-                                              ? "bg-emerald-100/50 border-emerald-300 text-emerald-800" 
-                                              : score === 3 
-                                                ? "bg-amber-100/50 border-amber-300 text-amber-800" 
-                                                : "bg-rose-100/50 border-rose-300 text-rose-800"
-                                          }`}>
-                                            {score >= 4 ? "양호" : score === 3 ? "보통" : "위험/보완 필요"}
-                                          </span>
-                                        </div>
-                                        <p className="font-medium text-slate-600 block pl-4.5">{feedback.comment}</p>
+                                  // Calculate the core KPI parameters based on experience and budget
+                                  let spaceSize = "30평 미만";
+                                  let recRegion = "신도시 외곽 / 경쟁 약한 학군";
+                                  let staffSetup = "교수부장 또는 상담실장";
+                                  let prepPeriod = "4~6개월";
+
+                                  if (expVal <= 2) {
+                                    // 초등영어학원 1년 미만
+                                    if (budgetVal <= 2) {
+                                      spaceSize = "30평 미만";
+                                      recRegion = "신도시 외곽 / 경쟁 약한 학군";
+                                      staffSetup = "교수부장 또는 상담실장";
+                                      prepPeriod = "4~6개월";
+                                    } else if (budgetVal === 3) {
+                                      spaceSize = "30평 미만";
+                                      recRegion = "중소도시 중심상권";
+                                      staffSetup = "교수부장 또는 상담실장";
+                                      prepPeriod = "4~6개월";
+                                    } else if (budgetVal === 4) {
+                                      spaceSize = "30~40평";
+                                      recRegion = "신규 택지지구";
+                                      staffSetup = "교수부장 또는 상담실장";
+                                      prepPeriod = "4~6개월";
+                                    } else { // budgetVal >= 5
+                                      spaceSize = "30~40평";
+                                      recRegion = "준학군지 (초등 밀집지역)";
+                                      staffSetup = "교수부장 또는 상담실장";
+                                      prepPeriod = "4~6개월";
+                                    }
+                                  } else if (expVal === 3) {
+                                    // 초등영어학원 1~3년
+                                    if (budgetVal <= 2) {
+                                      spaceSize = "30평 미만";
+                                      recRegion = "구도심 학군지";
+                                      staffSetup = "교수부장급 강사";
+                                      prepPeriod = "3~4개월";
+                                    } else if (budgetVal === 3) {
+                                      spaceSize = "40~50평";
+                                      recRegion = "초등학교 인접 상권";
+                                      staffSetup = "교수부장급 강사";
+                                      prepPeriod = "3~4개월";
+                                    } else if (budgetVal === 4) {
+                                      spaceSize = "40~50평";
+                                      recRegion = "브랜드 약한 학원 밀집지역";
+                                      staffSetup = "교수부장급 강사";
+                                      prepPeriod = "3~4개월";
+                                    } else {
+                                      spaceSize = "40~50평";
+                                      recRegion = "준프리미엄 학군";
+                                      staffSetup = "교수부장급 강사";
+                                      prepPeriod = "3~4개월";
+                                    }
+                                  } else if (expVal === 4) {
+                                    // 초등영어학원 3년 이상
+                                    if (budgetVal <= 2) {
+                                      spaceSize = "30평 미만";
+                                      recRegion = "틈새 학군지";
+                                      staffSetup = "경험있는 강사";
+                                      prepPeriod = "2~3개월";
+                                    } else if (budgetVal === 3) {
+                                      spaceSize = "40~50평";
+                                      recRegion = "중형 학군 중심상권";
+                                      staffSetup = "경험있는 강사";
+                                      prepPeriod = "2~3개월";
+                                    } else if (budgetVal === 4) {
+                                      spaceSize = "60평 이상";
+                                      recRegion = "프리미엄 학군지";
+                                      staffSetup = "경험있는 강사";
+                                      prepPeriod = "2~3개월";
+                                    } else {
+                                      spaceSize = "60평 이상";
+                                      recRegion = "대형 브랜드 경쟁지역";
+                                      staffSetup = "경험있는 강사";
+                                      prepPeriod = "2~3개월";
+                                    }
+                                  } else { // expVal >= 5
+                                    // 초등학원 운영
+                                    if (budgetVal <= 2) {
+                                      spaceSize = "30평 미만";
+                                      recRegion = "저경쟁 지역";
+                                      staffSetup = "경험있는 강사";
+                                      prepPeriod = "2~3개월";
+                                    } else if (budgetVal === 3) {
+                                      spaceSize = "40~50평";
+                                      recRegion = "초등 밀집 주거지역";
+                                      staffSetup = "경험있는 강사";
+                                      prepPeriod = "2~3개월";
+                                    } else if (budgetVal === 4) {
+                                      spaceSize = "60평 이상";
+                                      recRegion = "학원 상권 형성지역";
+                                      staffSetup = "경험있는 강사";
+                                      prepPeriod = "2~3개월";
+                                    } else {
+                                      spaceSize = "60평 이상";
+                                      recRegion = "핵심 학군지";
+                                      staffSetup = "경험있는 강사";
+                                      prepPeriod = "2~3개월";
+                                    }
+                                  }
+
+                                  return (
+                                    <div>
+                                      <div className="mb-4">
+                                        <span className="text-[11px] tracking-[0.1em] text-slate-400 font-sans uppercase block">COMPETENCY KEYMETRICS</span>
+                                        <h3 className="text-[16px] font-medium text-slate-800 mt-0.5">다차원 개원 타당 지표 (핵심 KPI)</h3>
                                       </div>
-                                    )}
+
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" id="kpi_grid_holder_new">
+                                        {[
+                                          { label: "추천 공간규모", value: spaceSize, desc: "원장 경력 및 자금 규격 맞춤 면적" },
+                                          { label: "추천지역", value: recRegion, desc: "경쟁 정합성에 맞춘 입지 추천" },
+                                          { label: "인력구성", value: staffSetup, desc: "경력 단계별 최적 행정/교수 팀빌딩" },
+                                          { label: "개원준비 기간", value: prepPeriod, desc: "경향성에 비춘 최적 개설 소요 예상 기간" }
+                                        ].map((kpi, i) => (
+                                          <div key={i} className="bg-white border border-[#E5E7EB] rounded-xl p-5 shadow-sm hover:border-[#C5A059] transition-colors">
+                                            <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">{kpi.label}</span>
+                                            <span className="font-extrabold text-[#0B3B24] text-sm sm:text-[15px] block mt-1.5 leading-normal">{kpi.value}</span>
+                                            <span className="text-[11px] text-slate-400 block mt-2 font-medium">{kpi.desc}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                              })()}
+
+                              {/* [항목별 진단 그래프 (가로 바 차트)] */}
+                              <div>
+                                <div className="mb-4 flex flex-col md:flex-row md:items-end justify-between gap-3">
+                                  <div>
+                                    <span className="text-[11px] tracking-[0.1em] text-slate-400 font-sans uppercase block">METRICS HORIZONTAL BARS</span>
+                                    <h3 className="text-[16px] font-medium text-slate-800 mt-0.5">부문별 자가 역량 스코어 진단 그래프 (8대 영역)</h3>
                                   </div>
-                                );
-                              });
-                            })()}
-                          </div>
-                        </div>
 
-                        {/* [오프닝맵 전문가 진단평가 요약 영역] */}
-                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 sm:p-8 space-y-6" id="expert_diagnosis_summary_report">
-                          <div className="border-b border-slate-200 pb-4 text-left">
-                            <span className="text-[11px] tracking-[0.1em] text-[#C5A059] font-sans font-bold uppercase block">EXPERT DIAGNOSIS & EVALUATION SUMMARY</span>
-                            <h3 className="text-base sm:text-lg font-black text-slate-800 mt-1">✦ 전문가 진단평가 요약 (Executive Prescription Summary)</h3>
-                            <p className="text-xs text-slate-500 mt-1 font-medium">부문별 자가 역량 스코어 진단 결과에 따른 1:1 오프닝맵 전문가 밀착 정밀 처방 핵심 요약 보고서</p>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {(() => {
-                              const isBrand = diagnosisResult.franchiseType === "브랜드 전환" || diagnosisResult.franchiseType === "브랜드전환";
-                              const categoriesList = isBrand 
-                                ? [
-                                    { qIdx: 0, label: "운영 형태" },
-                                    { qIdx: 1, label: "원내 공간" },
-                                    { qIdx: 2, label: "기존 원생" },
-                                    { qIdx: 3, label: "원장 경력" },
-                                    { qIdx: 4, label: "영어 교수" },
-                                    { qIdx: 5, label: "투자 가용" },
-                                    { qIdx: 6, label: "소득분류" },
-                                    { qIdx: 7, label: "초등인원" }
-                                  ]
-                                : [
-                                    { qIdx: 0, label: "원장 경영" },
-                                    { qIdx: 1, label: "영어 교수" },
-                                    { qIdx: 2, label: "자본 준비" },
-                                    { qIdx: 3, label: "상담 역량" },
-                                    { qIdx: 4, label: "학사 행정" },
-                                    { qIdx: 5, label: "조직 관리" }
-                                  ];
-
-                              return categoriesList.map((cat, idx) => {
-                                const score = diagnosisResult.answers[cat.qIdx] || 3;
-                                const feedback = resolveQuestionFeedback(diagnosisResult.franchiseType, cat.qIdx, score);
-                                const customLabelText = getCustomItemTitle(cat.label, score, score >= 4);
-                                
-                                const scoreColor = score >= 4 ? "text-emerald-700 bg-emerald-50 border-emerald-100" :
-                                                   score === 3 ? "text-amber-700 bg-amber-50 border-amber-100" :
-                                                   "text-rose-700 bg-rose-50 border-rose-100";
-
-                                return (
-                                  <div key={idx} className="bg-white border border-slate-100 rounded-lg p-5 shadow-xs space-y-2.5 flex flex-col justify-between hover:border-[#C5A059]/40 transition-colors text-left">
-                                    <div className="flex items-center justify-between gap-2 border-b border-slate-50 pb-2">
-                                      <div className="flex items-center space-x-2">
-                                        <span className={`w-2 h-2 rounded-full ${score >= 4 ? "bg-emerald-500" : score === 3 ? "bg-amber-500" : "bg-rose-500"}`} />
-                                        <span className="text-xs font-extrabold text-slate-800">{cat.label}</span>
-                                      </div>
-                                      <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${scoreColor}`}>
-                                        {feedback.scoreText} ({score}점)
+                                  <div className="flex flex-wrap items-center gap-3 text-[11px] font-bold">
+                                    <span className="text-slate-400 font-mono">* 5점 만족 척도</span>
+                                    <div className="flex items-center gap-3 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                                      <span className="flex items-center gap-1.5 text-emerald-600">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                                        초록=양호
+                                      </span>
+                                      <span className="flex items-center gap-1.5 text-amber-600">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                                        주황=보통
+                                      </span>
+                                      <span className="flex items-center gap-1.5 text-rose-500">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                                        빨강=위험
                                       </span>
                                     </div>
-                                    <p className="text-xs text-slate-600 leading-relaxed font-semibold">
-                                      {feedback.comment}
-                                    </p>
                                   </div>
-                                );
-                              });
-                            })()}
-                          </div>
+                                </div>
+
+                                <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-5 shadow-sm space-y-1.5" id="bars_diagnosis_chart">
+                                  {(() => {
+                                    const isBrand = diagnosisResult.franchiseType === "브랜드 전환" || diagnosisResult.franchiseType === "브랜드전환";
+                                    const categoriesList = isBrand
+                                      ? [
+                                        { qIdx: 0, label: "운영 형태" },
+                                        { qIdx: 1, label: "원내 공간" },
+                                        { qIdx: 2, label: "기존 원생" },
+                                        { qIdx: 3, label: "원장 경력" },
+                                        { qIdx: 4, label: "영어 교수" },
+                                        { qIdx: 5, label: "투자 가용" },
+                                        { qIdx: 6, label: "소득분류" },
+                                        { qIdx: 7, label: "초등인원" }
+                                      ]
+                                      : [
+                                        { qIdx: 0, label: "원장 경영" },
+                                        { qIdx: 1, label: "영어 교수" },
+                                        { qIdx: 2, label: "자본 준비" },
+                                        { qIdx: 3, label: "상담 역량" },
+                                        { qIdx: 4, label: "학사 행정" },
+                                        { qIdx: 5, label: "조직 관리" }
+                                      ];
+
+                                    return categoriesList.map((cat, idx) => {
+                                      const score = diagnosisResult.answers[cat.qIdx] || 3;
+                                      const feedback = resolveQuestionFeedback(diagnosisResult.franchiseType, cat.qIdx, score);
+                                      const bulletColor = score >= 4 ? "bg-emerald-500" : score === 3 ? "bg-orange-500" : "bg-red-500";
+                                      const textColor = score >= 4 ? "text-emerald-600" : score === 3 ? "text-orange-600" : "text-red-500";
+
+                                      const isExpanded = !!expandedCategories[cat.label];
+                                      const toggleExpand = () => {
+                                        setExpandedCategories(prev => ({
+                                          ...prev,
+                                          [cat.label]: !prev[cat.label]
+                                        }));
+                                      };
+
+                                      return (
+                                        <div key={idx} className="border-b border-slate-100 last:border-0 py-1.5">
+                                          <div
+                                            className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-2 rounded-lg cursor-pointer hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-all duration-150 select-none"
+                                            onClick={toggleExpand}
+                                          >
+
+                                            {/* Left visual label - Stacked cleanly for bullet/title vertical consistency */}
+                                            <div className="w-full md:w-44 flex flex-col justify-center shrink-0">
+                                              <div className="flex items-center space-x-2">
+                                                <span className={`w-2 h-2 rounded-full shrink-0 ${bulletColor}`} />
+                                                <span className="text-xs sm:text-sm font-extrabold text-slate-700 leading-none">{cat.label}</span>
+                                              </div>
+                                              <span className="text-[10px] text-slate-400 font-semibold block mt-1.5 ml-4 truncate max-w-[150px]" title={feedback.scoreText}>
+                                                {feedback.scoreText}
+                                              </span>
+                                            </div>
+
+                                            {/* Middle Progress slots */}
+                                            <div className="flex-1 flex items-center space-x-2 max-w-sm shrink-0">
+                                              <div className="flex-1 flex items-center space-x-1">
+                                                {[1, 2, 3, 4, 5].map((step) => (
+                                                  <div
+                                                    key={step}
+                                                    className={`h-3.5 flex-1 rounded transition-colors duration-150 ${step <= score
+                                                        ? bulletColor
+                                                        : "bg-slate-100/80"
+                                                      }`}
+                                                  />
+                                                ))}
+                                              </div>
+
+                                              {/* Dynamic Score Badge with Indicator */}
+                                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-black border shrink-0 ${score >= 4
+                                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                                  : score === 3
+                                                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                                                    : "bg-rose-50 text-rose-700 border-rose-200"
+                                                }`}>
+                                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${score >= 4 ? "bg-emerald-500" : score === 3 ? "bg-amber-500" : "bg-rose-500"}`} />
+                                                {score} / 5
+                                              </span>
+                                            </div>
+
+                                            {/* Right comments with truncated or click-to-expand */}
+                                            <div className="flex-1 flex items-center justify-between gap-3 min-w-0 md:pl-4">
+                                              <p className="text-slate-500 text-xs leading-relaxed truncate max-w-[320px] md:max-w-md">
+                                                {feedback.comment}
+                                              </p>
+
+                                              <div className="flex items-center space-x-1 shrink-0 text-[10px] font-black text-[#C5A059] bg-[#C5A059]/10 rounded-md px-2 py-1 hover:bg-[#C5A059]/20 transition-all">
+                                                <span>{isExpanded ? "접기" : "자세히 보기"}</span>
+                                                <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? "rotate-180" : "rotate-0"}`} />
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          {/* Detailed Accordion/Expendable feedback panel */}
+                                          {isExpanded && (
+                                            <div
+                                              className={`mt-1.5 ml-4 md:ml-6 p-4 rounded-xl border text-xs leading-relaxed transition-all duration-300 ${score >= 4
+                                                  ? "bg-emerald-50/50 border-emerald-100 text-slate-700"
+                                                  : score === 3
+                                                    ? "bg-amber-50/50 border-amber-100 text-slate-700"
+                                                    : "bg-rose-50/50 border-rose-100 text-slate-700"
+                                                }`}
+                                            >
+                                              <div className="font-extrabold text-[#0B3B24] mb-1.5 flex items-center gap-1">
+                                                <Sparkles className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
+                                                <span>오프닝맵 전문가 밀착 정밀 처방 의견</span>
+                                                <span className={`ml-2 text-[10px] px-1.5 py-0.2 rounded font-black border ${score >= 4
+                                                    ? "bg-emerald-100/50 border-emerald-300 text-emerald-800"
+                                                    : score === 3
+                                                      ? "bg-amber-100/50 border-amber-300 text-amber-800"
+                                                      : "bg-rose-100/50 border-rose-300 text-rose-800"
+                                                  }`}>
+                                                  {score >= 4 ? "양호" : score === 3 ? "보통" : "위험/보완 필요"}
+                                                </span>
+                                              </div>
+                                              <p className="font-medium text-slate-600 block pl-4.5">{feedback.comment}</p>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    });
+                                  })()}
+                                </div>
+                              </div>
+
+                              {/* [오프닝맵 전문가 진단평가 요약 영역] */}
+                              <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 sm:p-8 space-y-6" id="expert_diagnosis_summary_report">
+                                <div className="border-b border-slate-200 pb-4 text-left">
+                                  <span className="text-[11px] tracking-[0.1em] text-[#C5A059] font-sans font-bold uppercase block">EXPERT DIAGNOSIS & EVALUATION SUMMARY</span>
+                                  <h3 className="text-base sm:text-lg font-black text-slate-800 mt-1">✦ 전문가 진단평가 요약 (Executive Prescription Summary)</h3>
+                                  <p className="text-xs text-slate-500 mt-1 font-medium">부문별 자가 역량 스코어 진단 결과에 따른 1:1 오프닝맵 전문가 밀착 정밀 처방 핵심 요약 보고서</p>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  {(() => {
+                                    const isBrand = diagnosisResult.franchiseType === "브랜드 전환" || diagnosisResult.franchiseType === "브랜드전환";
+                                    const categoriesList = isBrand
+                                      ? [
+                                        { qIdx: 0, label: "운영 형태" },
+                                        { qIdx: 1, label: "원내 공간" },
+                                        { qIdx: 2, label: "기존 원생" },
+                                        { qIdx: 3, label: "원장 경력" },
+                                        { qIdx: 4, label: "영어 교수" },
+                                        { qIdx: 5, label: "투자 가용" },
+                                        { qIdx: 6, label: "소득분류" },
+                                        { qIdx: 7, label: "초등인원" }
+                                      ]
+                                      : [
+                                        { qIdx: 0, label: "원장 경영" },
+                                        { qIdx: 1, label: "영어 교수" },
+                                        { qIdx: 2, label: "자본 준비" },
+                                        { qIdx: 3, label: "상담 역량" },
+                                        { qIdx: 4, label: "학사 행정" },
+                                        { qIdx: 5, label: "조직 관리" }
+                                      ];
+
+                                    return categoriesList.map((cat, idx) => {
+                                      const score = diagnosisResult.answers[cat.qIdx] || 3;
+                                      const feedback = resolveQuestionFeedback(diagnosisResult.franchiseType, cat.qIdx, score);
+                                      const customLabelText = getCustomItemTitle(cat.label, score, score >= 4);
+
+                                      const scoreColor = score >= 4 ? "text-emerald-700 bg-emerald-50 border-emerald-100" :
+                                        score === 3 ? "text-amber-700 bg-amber-50 border-amber-100" :
+                                          "text-rose-700 bg-rose-50 border-rose-100";
+
+                                      return (
+                                        <div key={idx} className="bg-white border border-slate-100 rounded-lg p-5 shadow-xs space-y-2.5 flex flex-col justify-between hover:border-[#C5A059]/40 transition-colors text-left">
+                                          <div className="flex items-center justify-between gap-2 border-b border-slate-50 pb-2">
+                                            <div className="flex items-center space-x-2">
+                                              <span className={`w-2 h-2 rounded-full ${score >= 4 ? "bg-emerald-500" : score === 3 ? "bg-amber-500" : "bg-rose-500"}`} />
+                                              <span className="text-xs font-extrabold text-slate-800">{cat.label}</span>
+                                            </div>
+                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${scoreColor}`}>
+                                              {feedback.scoreText} ({score}점)
+                                            </span>
+                                          </div>
+                                          <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+                                            {feedback.comment}
+                                          </p>
+                                        </div>
+                                      );
+                                    });
+                                  })()}
+                                </div>
+                              </div>
+
+                              {/* [오프닝맵 정밀 상권 분석 지도] */}
+                              <div className="border-t border-slate-200/60 pt-8 mt-8 text-left space-y-4">
+                                <div>
+                                  <span className="text-[11px] tracking-[0.1em] text-[#C5A059] font-sans font-bold uppercase block">Opening Map Interactive Analyzer</span>
+                                  <h3 className="text-[16px] font-bold text-slate-800 mt-0.5">3. 고려대학교 협약 정량 상권 매칭 지도 분석 (Opening Map)</h3>
+                                </div>
+                                <OpeningMapResult
+                                  regionName={diagnosisResult.region || "서울 서초구"}
+                                  applicantName={diagnosisResult.name}
+                                  recommendedTypes={diagnosisResultAnalysis?.recFranchiseStyles}
+                                />
+                              </div>
+
+                              {/* [창업 예산 정밀 분석 시뮬레이터] */}
+                              <div className="border-t border-slate-200/60 pt-8 mt-8 text-left space-y-4">
+                                <div>
+                                  <span className="text-[11px] tracking-[0.1em] text-[#C5A059] font-sans font-bold uppercase block">Detailed Capital Allocation Analysis</span>
+                                  <h3 className="text-[16px] font-bold text-slate-800 mt-0.5">4. 창업 예산 시뮬레이션 및 자본 효율 진단 (Budget Simulator)</h3>
+                                </div>
+                                <BudgetSimulator
+                                  initialDesiredArea={diagnosisResult.desiredArea}
+                                  initialRegionalTier={diagnosisResult.regionalTier}
+                                  initialMyCapital={diagnosisResult.myCapital}
+                                  readOnly={true}
+                                />
+                              </div>
+
+                              {/* [하단 안내] */}
+
+                              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-5 bg-slate-50 rounded-xl border border-slate-100 no-print" id="page1_footer_notice">
+                                <div className="flex flex-col text-left gap-1">
+                                  <p className="text-xs text-slate-400 font-bold font-sans">
+                                    * 본 결과지는 오프닝맵 가맹영업팀 본사에 즉시 안전하게 공유되었습니다.
+                                  </p>
+                                  {isAdminAuthenticated && (
+                                    <p className="text-[11px] text-[#C5A059] font-bold">
+                                      🛡️ 관리자 계정으로 접속 중입니다. 대시보드로 복귀하거나 2페이지로 이동하실 수 있습니다.
+                                    </p>
+                                  )}
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-3">
+                                  {isAdminAuthenticated && (
+                                    <button
+                                      onClick={() => { setView("admin"); }}
+                                      className="px-4 py-2 bg-[#0B3B24] hover:bg-[#062919] text-white text-xs font-bold rounded-lg flex items-center space-x-1 shadow-sm transition-all cursor-pointer border-0"
+                                    >
+                                      <ArrowLeft className="w-3 h-3 text-[#C5A059]" />
+                                      <span>관리자 대시보드</span>
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => setResultActiveTab("page2")}
+                                    className="text-xs text-[#0B3B24] font-extrabold hover:underline flex items-center space-x-1 shrink-0 cursor-pointer"
+                                  >
+                                    <span>2페이지: 항목별 상세 전문가 피드백 검토하기</span>
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+
+                            </>
+                          )}
+
                         </div>
-
-                        {/* [오프닝맵 정밀 상권 분석 지도] */}
-                        <div className="border-t border-slate-200/60 pt-8 mt-8 text-left space-y-4">
-                          <div>
-                            <span className="text-[11px] tracking-[0.1em] text-[#C5A059] font-sans font-bold uppercase block">Opening Map Interactive Analyzer</span>
-                            <h3 className="text-[16px] font-bold text-slate-800 mt-0.5">3. 고려대학교 협약 정량 상권 매칭 지도 분석 (Opening Map)</h3>
-                          </div>
-                          <OpeningMapResult 
-                            regionName={diagnosisResult.region || "서울 서초구"}
-                            applicantName={diagnosisResult.name}
-                            recommendedTypes={diagnosisResultAnalysis?.recFranchiseStyles}
-                          />
-                        </div>
-
-                        {/* [창업 예산 정밀 분석 시뮬레이터] */}
-                        <div className="border-t border-slate-200/60 pt-8 mt-8 text-left space-y-4">
-                          <div>
-                            <span className="text-[11px] tracking-[0.1em] text-[#C5A059] font-sans font-bold uppercase block">Detailed Capital Allocation Analysis</span>
-                            <h3 className="text-[16px] font-bold text-slate-800 mt-0.5">4. 창업 예산 시뮬레이션 및 자본 효율 진단 (Budget Simulator)</h3>
-                          </div>
-                          <BudgetSimulator
-                            initialDesiredArea={diagnosisResult.desiredArea}
-                            initialRegionalTier={diagnosisResult.regionalTier}
-                            initialMyCapital={diagnosisResult.myCapital}
-                            readOnly={true}
-                          />
-                        </div>
-
-                        {/* [하단 안내] */}
-
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-5 bg-slate-50 rounded-xl border border-slate-100 no-print" id="page1_footer_notice">
-                          <div className="flex flex-col text-left gap-1">
-                            <p className="text-xs text-slate-400 font-bold font-sans">
-                              * 본 결과지는 오프닝맵 가맹영업팀 본사에 즉시 안전하게 공유되었습니다.
-                            </p>
-                            {isAdminAuthenticated && (
-                              <p className="text-[11px] text-[#C5A059] font-bold">
-                                🛡️ 관리자 계정으로 접속 중입니다. 대시보드로 복귀하거나 2페이지로 이동하실 수 있습니다.
-                              </p>
-                            )}
-                          </div>
-                          
-                          <div className="flex flex-wrap items-center gap-3">
-                            {isAdminAuthenticated && (
-                              <button
-                                onClick={() => { setView("admin"); }}
-                                className="px-4 py-2 bg-[#0B3B24] hover:bg-[#062919] text-white text-xs font-bold rounded-lg flex items-center space-x-1 shadow-sm transition-all cursor-pointer border-0"
-                              >
-                                <ArrowLeft className="w-3 h-3 text-[#C5A059]" />
-                                <span>관리자 대시보드</span>
-                              </button>
-                            )}
-                            <button
-                              onClick={() => setResultActiveTab("page2")}
-                              className="text-xs text-[#0B3B24] font-extrabold hover:underline flex items-center space-x-1 shrink-0 cursor-pointer"
-                            >
-                              <span>2페이지: 항목별 상세 전문가 피드백 검토하기</span>
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-
-                          </>
-                        )}
-
-                      </div>
-                    );
-                  })()}
+                      );
+                    })()}
 
                     {/* RENDER PAGE 2: 항목별 상세 코멘트 & 로드맵 */}
                     {resultActiveTab === "page2" && isAdminAuthenticated && (
                       <div className="space-y-10" id="result_page_two_view">
-                        
+
                         {/* [상단 요약바] */}
                         <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-4 text-xs sm:text-[13px] text-slate-600 font-medium font-sans">
                           <div>
@@ -5395,41 +5438,41 @@ export default function App() {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="detailed_cards_holder">
                             {(() => {
                               const isBrand = diagnosisResult.franchiseType === "브랜드 전환" || diagnosisResult.franchiseType === "브랜드전환";
-                              const categoriesList = isBrand 
+                              const categoriesList = isBrand
                                 ? [
-                                    { qIdx: 0, label: "운영 형태", icon: Award },
-                                    { qIdx: 1, label: "원내 공간", icon: BookOpen },
-                                    { qIdx: 2, label: "기존 원생", icon: TrendingUp },
-                                    { qIdx: 3, label: "원장 경력", icon: MapPin },
-                                    { qIdx: 4, label: "영어 교수", icon: Users },
-                                    { qIdx: 5, label: "투자 가용", icon: Grid },
-                                    { qIdx: 6, label: "소득분류", icon: Users },
-                                    { qIdx: 7, label: "초등인원", icon: FileText }
-                                  ]
+                                  { qIdx: 0, label: "운영 형태", icon: Award },
+                                  { qIdx: 1, label: "원내 공간", icon: BookOpen },
+                                  { qIdx: 2, label: "기존 원생", icon: TrendingUp },
+                                  { qIdx: 3, label: "원장 경력", icon: MapPin },
+                                  { qIdx: 4, label: "영어 교수", icon: Users },
+                                  { qIdx: 5, label: "투자 가용", icon: Grid },
+                                  { qIdx: 6, label: "소득분류", icon: Users },
+                                  { qIdx: 7, label: "초등인원", icon: FileText }
+                                ]
                                 : [
-                                    { qIdx: 0, label: "원장 경영", icon: Award },
-                                    { qIdx: 1, label: "영어 교수", icon: BookOpen },
-                                    { qIdx: 2, label: "자본 준비", icon: TrendingUp },
-                                    { qIdx: 3, label: "상담 역량", icon: MapPin },
-                                    { qIdx: 4, label: "학사 행정", icon: Users },
-                                    { qIdx: 5, label: "조직 관리", icon: Grid }
-                                  ];
+                                  { qIdx: 0, label: "원장 경영", icon: Award },
+                                  { qIdx: 1, label: "영어 교수", icon: BookOpen },
+                                  { qIdx: 2, label: "자본 준비", icon: TrendingUp },
+                                  { qIdx: 3, label: "상담 역량", icon: MapPin },
+                                  { qIdx: 4, label: "학사 행정", icon: Users },
+                                  { qIdx: 5, label: "조직 관리", icon: Grid }
+                                ];
 
                               return categoriesList.map((cat, idx) => {
                                 const score = diagnosisResult.answers[cat.qIdx] || 3;
                                 const feedback = resolveQuestionFeedback(diagnosisResult.franchiseType, cat.qIdx, score);
                                 const IconComponent = cat.icon;
 
-                                const badgeColor = score >= 4 ? "bg-emerald-50 text-emerald-600 border border-emerald-200" : 
-                                                   score === 3 ? "bg-amber-50 text-amber-600 border border-amber-200" : 
-                                                   "bg-rose-50 text-rose-600 border border-rose-250";
+                                const badgeColor = score >= 4 ? "bg-emerald-50 text-emerald-600 border border-emerald-200" :
+                                  score === 3 ? "bg-amber-50 text-amber-600 border border-amber-200" :
+                                    "bg-rose-50 text-rose-600 border border-rose-250";
                                 const badgeText = score >= 4 ? "우수" : score === 3 ? "준수" : "검토필요";
 
                                 const actionTags = getCategoryActionTags(cat.label, score);
 
                                 return (
                                   <div key={idx} className="bg-white border border-[#E5E7EB] rounded-xl p-6 sm:p-8 flex flex-col justify-between shadow-sm space-y-4 hover:border-[#C5A059] transition-all" id={`detailed_item_card_${idx}`}>
-                                    
+
                                     {/* Header info */}
                                     <div>
                                       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -5444,31 +5487,31 @@ export default function App() {
                                         </span>
                                       </div>
 
-                                    {/* Commentary text: line-height: 1.7, 3~5 lines */}
-                                    <p className="text-slate-600 text-xs sm:text-[13px] leading-relaxed font-medium mt-4 font-sans" style={{ lineHeight: '1.7', minHeight: '80px' }}>
-                                      {feedback.comment || "세부 답변에 입각한 본사 경영기획 처방 솔루션입니다. 전임 컨설턴트와의 심층 면접 소싱 과정에서 상세 대안을 열람하실 수 있습니다."}
-                                    </p>
-                                  </div>
+                                      {/* Commentary text: line-height: 1.7, 3~5 lines */}
+                                      <p className="text-slate-600 text-xs sm:text-[13px] leading-relaxed font-medium mt-4 font-sans" style={{ lineHeight: '1.7', minHeight: '80px' }}>
+                                        {feedback.comment || "세부 답변에 입각한 본사 경영기획 처방 솔루션입니다. 전임 컨설턴트와의 심층 면접 소싱 과정에서 상세 대안을 열람하실 수 있습니다."}
+                                      </p>
+                                    </div>
 
-                                  {/* Dynamic Recommended Action pills */}
-                                  <div className="pt-3 border-t border-slate-100">
-                                    <span className="text-[10px] text-slate-400 font-bold block mb-2 uppercase tracking-wide">💡 본사 추천 액션 플랜</span>
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {actionTags.map((tag, i) => (
-                                        <span key={i} className="bg-[#0B3B24]/5 text-[#0B3B24] border border-[#0B3B24]/10 px-2 py-0.5 rounded text-[10px] font-bold font-sans">
-                                          {tag}
-                                        </span>
-                                      ))}
+                                    {/* Dynamic Recommended Action pills */}
+                                    <div className="pt-3 border-t border-slate-100">
+                                      <span className="text-[10px] text-slate-400 font-bold block mb-2 uppercase tracking-wide">💡 본사 추천 액션 플랜</span>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {actionTags.map((tag, i) => (
+                                          <span key={i} className="bg-[#0B3B24]/5 text-[#0B3B24] border border-[#0B3B24]/10 px-2 py-0.5 rounded text-[10px] font-bold font-sans">
+                                            {tag}
+                                          </span>
+                                        ))}
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                              );
-                            });
-                          })()}
-                        </div>
+                                );
+                              });
+                            })()}
+                          </div>
                         </div>
 
-                          {/* 개원 준비 로드맵 (4단계) 삭제함 */}
+                        {/* 개원 준비 로드맵 (4단계) 삭제함 */}
 
                         {/* [하단 CTA 버튼 2개 + 13px gray 텍스트] */}
                         <div className="flex flex-col md:flex-row items-center justify-between gap-6 pt-4 border-t border-[#E5E7EB] no-print" id="page2_cta_row">
@@ -5480,17 +5523,16 @@ export default function App() {
                               💡 <b>알림:</b> 브라우저 인쇄가 제한된 프레임 개발 환경에서는 자동으로 <b>고해상도 PDF 리포트 파일</b>이 즉시 다운로드됩니다.
                             </p>
                           </div>
-                          
+
                           <div className="flex items-center space-x-3 w-full sm:w-auto shrink-0 justify-end">
                             <button
                               id="print_report_btn"
                               onClick={handleDownloadPdfOrPrint}
                               disabled={isGeneratingPdf}
-                              className={`w-full sm:w-auto h-12 text-white px-6 rounded-lg text-xs transition-all flex items-center justify-center space-x-2 font-bold shadow cursor-pointer border-0 ${
-                                isGeneratingPdf 
-                                  ? "bg-slate-400 cursor-not-allowed text-slate-200" 
+                              className={`w-full sm:w-auto h-12 text-white px-6 rounded-lg text-xs transition-all flex items-center justify-center space-x-2 font-bold shadow cursor-pointer border-0 ${isGeneratingPdf
+                                  ? "bg-slate-400 cursor-not-allowed text-slate-200"
                                   : "bg-[#7C3AED] hover:bg-[#6D28D9] active:scale-95"
-                              }`}
+                                }`}
                             >
                               {isGeneratingPdf ? (
                                 <>
@@ -5504,7 +5546,7 @@ export default function App() {
                                 </>
                               )}
                             </button>
-                            
+
                             {isAdminAuthenticated ? (
                               <button
                                 onClick={() => { setView("admin"); }}
@@ -5538,7 +5580,7 @@ export default function App() {
 
           {/* VIEW: ADMIN GATEWAY & DASHBOARD */}
           {view === "admin" && (
-            <motion.div 
+            <motion.div
               key="view_admin"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -5549,7 +5591,7 @@ export default function App() {
               {!isAdminAuthenticated ? (
                 /* 1. Admin Password protection card */
                 <div className="max-w-md mx-auto p-8 rounded-xl bg-white border border-[#E5E7EB] shadow-lg relative border-t-8 border-t-[#C5A059]">
-                  
+
                   <div className="text-center mb-6">
                     <div className="w-12 h-12 rounded-lg bg-[#C5A059]/10 flex items-center justify-center mx-auto mb-3 border border-[#C5A059]/20">
                       <Lock className="w-6 h-6 text-[#C5A059]" />
@@ -5609,7 +5651,7 @@ export default function App() {
               ) : (
                 /* 2. Authenticated Admin view layout */
                 <div className="space-y-8" id="admin_dashboard_panels">
-                  
+
                   {/* Top summary row stats layout */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4" id="admin_stats_cards_row">
                     <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 shadow-sm flex items-center space-x-4">
@@ -5690,15 +5732,14 @@ export default function App() {
                       <h3 className="text-[#0B3B24] font-black text-sm">본사 공식 관리업무를 카테고리별로 선택하여 간편하게 확인하세요</h3>
                       <p className="text-[11px] text-slate-500">필요한 정보군을 카테고리 탭으로 전환하여 실시간 조회 및 원클릭 제어가 가능합니다.</p>
                     </div>
-                    
+
                     <div className="flex flex-wrap gap-2">
                       <button
                         onClick={() => setAdminCategoryTab("dashboard")}
-                        className={`px-3.5 py-2.5 rounded-lg text-xs font-black flex items-center space-x-1.5 transition-all shadow-sm border cursor-pointer ${
-                          adminCategoryTab === "dashboard"
+                        className={`px-3.5 py-2.5 rounded-lg text-xs font-black flex items-center space-x-1.5 transition-all shadow-sm border cursor-pointer ${adminCategoryTab === "dashboard"
                             ? "bg-[#0B3B24] text-white border-transparent scale-105"
                             : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                        }`}
+                          }`}
                       >
                         <TrendingUp className="w-3.5 h-3.5 text-[#C5A059]" />
                         <span>📊 통계 대시보드</span>
@@ -5706,11 +5747,10 @@ export default function App() {
 
                       <button
                         onClick={() => setAdminCategoryTab("applicants")}
-                        className={`px-3.5 py-2.5 rounded-lg text-xs font-black flex items-center space-x-1.5 transition-all shadow-sm border cursor-pointer ${
-                          adminCategoryTab === "applicants"
+                        className={`px-3.5 py-2.5 rounded-lg text-xs font-black flex items-center space-x-1.5 transition-all shadow-sm border cursor-pointer ${adminCategoryTab === "applicants"
                             ? "bg-[#0B3B24] text-white border-transparent scale-105"
                             : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                        }`}
+                          }`}
                       >
                         <Users className="w-3.5 h-3.5 text-[#C5A059]" />
                         <span>👥 신청자 명단 ({filteredApplicants.length}건)</span>
@@ -5718,11 +5758,10 @@ export default function App() {
 
                       <button
                         onClick={() => setAdminCategoryTab("promotion")}
-                        className={`px-3.5 py-2.5 rounded-lg text-xs font-black flex items-center space-x-1.5 transition-all shadow-sm border cursor-pointer ${
-                          adminCategoryTab === "promotion"
+                        className={`px-3.5 py-2.5 rounded-lg text-xs font-black flex items-center space-x-1.5 transition-all shadow-sm border cursor-pointer ${adminCategoryTab === "promotion"
                             ? "bg-[#0B3B24] text-white border-transparent scale-105"
                             : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                        }`}
+                          }`}
                       >
                         <BookOpen className="w-3.5 h-3.5 text-[#C5A059]" />
                         <span>📁 홍보용 콘텐츠</span>
@@ -5730,11 +5769,10 @@ export default function App() {
 
                       <button
                         onClick={() => setAdminCategoryTab("consultants")}
-                        className={`px-3.5 py-2.5 rounded-lg text-xs font-black flex items-center space-x-1.5 transition-all shadow-sm border cursor-pointer ${
-                          adminCategoryTab === "consultants"
+                        className={`px-3.5 py-2.5 rounded-lg text-xs font-black flex items-center space-x-1.5 transition-all shadow-sm border cursor-pointer ${adminCategoryTab === "consultants"
                             ? "bg-[#0B3B24] text-white border-transparent scale-105"
                             : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                        }`}
+                          }`}
                       >
                         <Sparkles className="w-3.5 h-3.5 text-[#C5A059]" />
                         <span>💬 컨설턴트 고유코드</span>
@@ -5742,11 +5780,10 @@ export default function App() {
 
                       <button
                         onClick={() => setAdminCategoryTab("systems")}
-                        className={`px-3.5 py-2.5 rounded-lg text-xs font-black flex items-center space-x-1.5 transition-all shadow-sm border cursor-pointer ${
-                          adminCategoryTab === "systems"
+                        className={`px-3.5 py-2.5 rounded-lg text-xs font-black flex items-center space-x-1.5 transition-all shadow-sm border cursor-pointer ${adminCategoryTab === "systems"
                             ? "bg-[#0B3B24] text-white border-transparent scale-105"
                             : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                        }`}
+                          }`}
                       >
                         <FileSpreadsheet className="w-3.5 h-3.5 text-[#C5A059]" />
                         <span>⚙️ 엑셀 및 시스템</span>
@@ -5763,192 +5800,192 @@ export default function App() {
                     >
                       {/* Lead Pipeline Status Donut Chart Panel */}
                       <div className="bg-white border border-[#E5E7EB] rounded-xl shadow-md p-6 space-y-6" id="admin_pipeline_donut_chart_panel">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 border-[#E5E7EB]">
-                      <div>
-                        <h3 className="text-[#0B3B24] font-extrabold text-base flex items-center space-x-2">
-                          <TrendingUp className="w-5 h-5 text-[#C5A059]" />
-                          <span>가맹 영업 리드 파이프라인 진행 현황</span>
-                        </h3>
-                        <p className="text-xs text-slate-500 mt-1">예비 원장님들이 각 가맹 상담 단계에 배분되어 있는 비율을 도넛 차트로 실시간 시각화합니다.</p>
-                      </div>
-                      <div className="text-[11px] font-mono text-slate-500 bg-slate-50 border border-slate-200 rounded px-2.5 py-1 select-none">
-                        전체 파이프라인 관리 대상: <strong className="text-[#0B3B24] font-mono">{applicants.length}건</strong>
-                      </div>
-                    </div>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 border-[#E5E7EB]">
+                          <div>
+                            <h3 className="text-[#0B3B24] font-extrabold text-base flex items-center space-x-2">
+                              <TrendingUp className="w-5 h-5 text-[#C5A059]" />
+                              <span>가맹 영업 리드 파이프라인 진행 현황</span>
+                            </h3>
+                            <p className="text-xs text-slate-500 mt-1">예비 원장님들이 각 가맹 상담 단계에 배분되어 있는 비율을 도넛 차트로 실시간 시각화합니다.</p>
+                          </div>
+                          <div className="text-[11px] font-mono text-slate-500 bg-slate-50 border border-slate-200 rounded px-2.5 py-1 select-none">
+                            전체 파이프라인 관리 대상: <strong className="text-[#0B3B24] font-mono">{applicants.length}건</strong>
+                          </div>
+                        </div>
 
-                    {/* Donut Chart Visualization container */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-                      {/* Left: Interactive Donut Chart using Recharts */}
-                      <div className="lg:col-span-5 flex flex-col items-center justify-center relative p-2" id="donut_chart_container">
-                        {applicants.length > 0 ? (
-                          <div className="w-full h-64 relative">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <RechartsPieChart>
-                                <Pie
-                                  data={(() => {
-                                    const counts: Record<string, number> = {
-                                      "신규접수": 0,
-                                      "1차상담": 0,
-                                      "상권분석": 0,
-                                      "설명회참석": 0,
-                                      "계약진행": 0,
-                                      "계약완료": 0,
-                                      "보류": 0
-                                    };
-                                    applicants.forEach(app => {
-                                      const status = app.counselorStatus || "신규접수";
-                                      if (counts[status] !== undefined) {
-                                        counts[status]++;
-                                      } else {
-                                        counts[status] = (counts[status] || 0) + 1;
-                                      }
-                                    });
-                                    return Object.entries(counts)
-                                      .map(([name, value]) => ({ name, value }))
-                                      .filter(item => item.value > 0);
-                                  })()}
-                                  cx="50%"
-                                  cy="50%"
-                                  innerRadius={65}
-                                  outerRadius={90}
-                                  paddingAngle={3}
-                                  dataKey="value"
-                                >
-                                  {(() => {
-                                    const colors: Record<string, string> = {
-                                      "신규접수": "#3B82F6",    // Blue
-                                      "1차상담": "#F59E0B",     // Amber
-                                      "상권분석": "#F97316",    // Orange
-                                      "설명회참석": "#6366F1",  // Indigo
-                                      "계약진행": "#14B8A6",    // Teal
-                                      "계약완료": "#10B981",    // Emerald
-                                      "보류": "#F43F5E"        // Rose
-                                    };
-                                    const counts: Record<string, number> = {
-                                      "신규접수": 0,
-                                      "1차상담": 0,
-                                      "상권분석": 0,
-                                      "설명회참석": 0,
-                                      "계약진행": 0,
-                                      "계약완료": 0,
-                                      "보류": 0
-                                    };
-                                    applicants.forEach(app => {
-                                      const status = app.counselorStatus || "신규접수";
-                                      if (counts[status] !== undefined) {
-                                        counts[status]++;
-                                      } else {
-                                        counts[status] = (counts[status] || 0) + 1;
-                                      }
-                                    });
-                                    return Object.entries(counts)
-                                      .filter(([_, value]) => value > 0)
-                                      .map(([name]) => (
-                                        <Cell key={`cell-${name}`} fill={colors[name] || "#94A3B8"} />
-                                      ));
-                                  })()}
-                                </Pie>
-                                <Tooltip
-                                  formatter={(value: any, name: any) => [
-                                    `${value}명 (${Math.round((Number(value) / applicants.length) * 100)}%)`,
-                                    name
-                                  ]}
-                                  contentStyle={{
-                                    backgroundColor: "rgba(27, 54, 93, 0.95)",
-                                    border: "1px solid #C5A059",
-                                    borderRadius: "8px",
-                                    color: "#fff",
-                                    fontSize: "12px",
-                                    fontWeight: "bold",
-                                    fontFamily: "sans-serif"
-                                  }}
-                                  itemStyle={{ color: "#fff" }}
-                                  labelStyle={{ display: "none" }}
-                                />
-                              </RechartsPieChart>
-                            </ResponsiveContainer>
+                        {/* Donut Chart Visualization container */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                          {/* Left: Interactive Donut Chart using Recharts */}
+                          <div className="lg:col-span-5 flex flex-col items-center justify-center relative p-2" id="donut_chart_container">
+                            {applicants.length > 0 ? (
+                              <div className="w-full h-64 relative">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <RechartsPieChart>
+                                    <Pie
+                                      data={(() => {
+                                        const counts: Record<string, number> = {
+                                          "신규접수": 0,
+                                          "1차상담": 0,
+                                          "상권분석": 0,
+                                          "설명회참석": 0,
+                                          "계약진행": 0,
+                                          "계약완료": 0,
+                                          "보류": 0
+                                        };
+                                        applicants.forEach(app => {
+                                          const status = app.counselorStatus || "신규접수";
+                                          if (counts[status] !== undefined) {
+                                            counts[status]++;
+                                          } else {
+                                            counts[status] = (counts[status] || 0) + 1;
+                                          }
+                                        });
+                                        return Object.entries(counts)
+                                          .map(([name, value]) => ({ name, value }))
+                                          .filter(item => item.value > 0);
+                                      })()}
+                                      cx="50%"
+                                      cy="50%"
+                                      innerRadius={65}
+                                      outerRadius={90}
+                                      paddingAngle={3}
+                                      dataKey="value"
+                                    >
+                                      {(() => {
+                                        const colors: Record<string, string> = {
+                                          "신규접수": "#3B82F6",    // Blue
+                                          "1차상담": "#F59E0B",     // Amber
+                                          "상권분석": "#F97316",    // Orange
+                                          "설명회참석": "#6366F1",  // Indigo
+                                          "계약진행": "#14B8A6",    // Teal
+                                          "계약완료": "#10B981",    // Emerald
+                                          "보류": "#F43F5E"        // Rose
+                                        };
+                                        const counts: Record<string, number> = {
+                                          "신규접수": 0,
+                                          "1차상담": 0,
+                                          "상권분석": 0,
+                                          "설명회참석": 0,
+                                          "계약진행": 0,
+                                          "계약완료": 0,
+                                          "보류": 0
+                                        };
+                                        applicants.forEach(app => {
+                                          const status = app.counselorStatus || "신규접수";
+                                          if (counts[status] !== undefined) {
+                                            counts[status]++;
+                                          } else {
+                                            counts[status] = (counts[status] || 0) + 1;
+                                          }
+                                        });
+                                        return Object.entries(counts)
+                                          .filter(([_, value]) => value > 0)
+                                          .map(([name]) => (
+                                            <Cell key={`cell-${name}`} fill={colors[name] || "#94A3B8"} />
+                                          ));
+                                      })()}
+                                    </Pie>
+                                    <Tooltip
+                                      formatter={(value: any, name: any) => [
+                                        `${value}명 (${Math.round((Number(value) / applicants.length) * 100)}%)`,
+                                        name
+                                      ]}
+                                      contentStyle={{
+                                        backgroundColor: "rgba(27, 54, 93, 0.95)",
+                                        border: "1px solid #C5A059",
+                                        borderRadius: "8px",
+                                        color: "#fff",
+                                        fontSize: "12px",
+                                        fontWeight: "bold",
+                                        fontFamily: "sans-serif"
+                                      }}
+                                      itemStyle={{ color: "#fff" }}
+                                      labelStyle={{ display: "none" }}
+                                    />
+                                  </RechartsPieChart>
+                                </ResponsiveContainer>
 
-                            {/* Centered Total Counter label */}
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none select-none">
-                              <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest block font-sans">총 가맹 리드</span>
-                              <span className="text-3xl font-black text-[#0B3B24] font-mono leading-none">{applicants.length}</span>
-                              <span className="text-xs text-slate-500 font-bold ml-0.5">건</span>
+                                {/* Centered Total Counter label */}
+                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none select-none">
+                                  <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest block font-sans">총 가맹 리드</span>
+                                  <span className="text-3xl font-black text-[#0B3B24] font-mono leading-none">{applicants.length}</span>
+                                  <span className="text-xs text-slate-500 font-bold ml-0.5">건</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-center py-16 text-slate-400 text-xs w-full">
+                                가맹 신청인 정보가 없어 파이프라인 현황을 표시할 수 없습니다.
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Right: Enriched Table & Legend statistics with custom color indicators */}
+                          <div className="lg:col-span-7 space-y-4" id="donut_legend_statistics">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {(() => {
+                                const colors: Record<string, string> = {
+                                  "신규접수": "#3B82F6",    // Blue
+                                  "1차상담": "#F59E0B",     // Amber
+                                  "상권분석": "#F97316",    // Orange
+                                  "설명회참석": "#6366F1",  // Indigo
+                                  "계약진행": "#14B8A6",    // Teal
+                                  "계약완료": "#10B981",    // Emerald
+                                  "보류": "#F43F5E"        // Rose
+                                };
+                                const statusNames = ["신규접수", "1차상담", "상권분석", "설명회참석", "계약진행", "계약완료", "보류"];
+
+                                return statusNames.map((status) => {
+                                  const count = applicants.filter(app => app.counselorStatus === status).length;
+                                  const pct = applicants.length > 0 ? Math.round((count / applicants.length) * 100) : 0;
+                                  const barColor = colors[status] || "#94A3B8";
+
+                                  return (
+                                    <div
+                                      key={status}
+                                      className="bg-slate-50 p-3 rounded-lg border border-slate-100 flex items-center justify-between hover:bg-slate-100/70 transition-all shadow-sm"
+                                    >
+                                      <div className="flex items-center space-x-2.5 min-w-0">
+                                        {/* Color Indicator Bullet */}
+                                        <span
+                                          className="w-3 h-3 rounded-full shrink-0 shadow-sm"
+                                          style={{ backgroundColor: barColor }}
+                                        />
+                                        <div className="truncate">
+                                          <span className="text-xs text-slate-700 font-extrabold block leading-snug">{status}</span>
+                                          <span className="text-[10px] text-slate-400 font-mono mt-0.5 block font-semibold">
+                                            Pipeline Level
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      <div className="text-right shrink-0">
+                                        <span className="text-sm font-black text-[#0B3B24] font-mono">{count}명</span>
+                                        <span className="text-[10px] text-slate-400 font-bold ml-1.5 font-mono bg-white border border-slate-200/60 px-1 rounded">
+                                          {pct}%
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                });
+                              })()}
+                            </div>
+
+                            {/* Pipeline Insight Summary Text banner */}
+                            <div className="bg-[#0B3B24]/5 border border-[#0B3B24]/10 rounded-lg p-3 text-[11px] leading-relaxed text-slate-600 font-medium">
+                              💡 <strong className="text-[#0B3B24]">마일스톤 분석:</strong> 전체 가맹 리드 중 본사 계약 체결 완료율은{" "}
+                              <strong className="text-[#C5A059]">
+                                {applicants.length > 0
+                                  ? Math.round((applicants.filter(a => a.counselorStatus === "계약완료").length / applicants.length) * 100)
+                                  : 0}%
+                              </strong>{" "}
+                              이며, 최종 단계로 전환을 유도하기 위한 집중 관리가 필요합니다. 해당 시각화 지표는 가맹 상담사의 정보 갱신에 따라 실시간 반영됩니다.
                             </div>
                           </div>
-                        ) : (
-                          <div className="text-center py-16 text-slate-400 text-xs w-full">
-                            가맹 신청인 정보가 없어 파이프라인 현황을 표시할 수 없습니다.
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Right: Enriched Table & Legend statistics with custom color indicators */}
-                      <div className="lg:col-span-7 space-y-4" id="donut_legend_statistics">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {(() => {
-                            const colors: Record<string, string> = {
-                              "신규접수": "#3B82F6",    // Blue
-                              "1차상담": "#F59E0B",     // Amber
-                              "상권분석": "#F97316",    // Orange
-                              "설명회참석": "#6366F1",  // Indigo
-                              "계약진행": "#14B8A6",    // Teal
-                              "계약완료": "#10B981",    // Emerald
-                              "보류": "#F43F5E"        // Rose
-                            };
-                            const statusNames = ["신규접수", "1차상담", "상권분석", "설명회참석", "계약진행", "계약완료", "보류"];
-                            
-                            return statusNames.map((status) => {
-                              const count = applicants.filter(app => app.counselorStatus === status).length;
-                              const pct = applicants.length > 0 ? Math.round((count / applicants.length) * 100) : 0;
-                              const barColor = colors[status] || "#94A3B8";
-
-                              return (
-                                <div 
-                                  key={status} 
-                                  className="bg-slate-50 p-3 rounded-lg border border-slate-100 flex items-center justify-between hover:bg-slate-100/70 transition-all shadow-sm"
-                                >
-                                  <div className="flex items-center space-x-2.5 min-w-0">
-                                    {/* Color Indicator Bullet */}
-                                    <span 
-                                      className="w-3 h-3 rounded-full shrink-0 shadow-sm" 
-                                      style={{ backgroundColor: barColor }} 
-                                    />
-                                    <div className="truncate">
-                                      <span className="text-xs text-slate-700 font-extrabold block leading-snug">{status}</span>
-                                      <span className="text-[10px] text-slate-400 font-mono mt-0.5 block font-semibold">
-                                        Pipeline Level
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  <div className="text-right shrink-0">
-                                    <span className="text-sm font-black text-[#0B3B24] font-mono">{count}명</span>
-                                    <span className="text-[10px] text-slate-400 font-bold ml-1.5 font-mono bg-white border border-slate-200/60 px-1 rounded">
-                                      {pct}%
-                                    </span>
-                                  </div>
-                                </div>
-                              );
-                            });
-                          })()}
-                        </div>
-
-                        {/* Pipeline Insight Summary Text banner */}
-                        <div className="bg-[#0B3B24]/5 border border-[#0B3B24]/10 rounded-lg p-3 text-[11px] leading-relaxed text-slate-600 font-medium">
-                          💡 <strong className="text-[#0B3B24]">마일스톤 분석:</strong> 전체 가맹 리드 중 본사 계약 체결 완료율은{" "}
-                          <strong className="text-[#C5A059]">
-                            {applicants.length > 0
-                              ? Math.round((applicants.filter(a => a.counselorStatus === "계약완료").length / applicants.length) * 100)
-                              : 0}%
-                          </strong>{" "}
-                          이며, 최종 단계로 전환을 유도하기 위한 집중 관리가 필요합니다. 해당 시각화 지표는 가맹 상담사의 정보 갱신에 따라 실시간 반영됩니다.
                         </div>
                       </div>
-                    </div>
-                  </div>
 
-                  {/* Lead Score and Quality Trend Analysis Panel (Line Chart) */}
-                  <LeadQualityTrendChart applicants={applicants} />
+                      {/* Lead Score and Quality Trend Analysis Panel (Line Chart) */}
+                      <LeadQualityTrendChart applicants={applicants} />
                     </motion.div>
                   )}
 
@@ -5961,214 +5998,213 @@ export default function App() {
                     >
                       {/* Consultant Codes Management Panel Card */}
                       <div className="bg-white border border-[#E5E7EB] rounded-xl shadow-md p-6 space-y-6 animate-fade-in" id="admin_consultants_panel_card">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 border-[#E5E7EB]">
-                      <div>
-                        <h3 className="text-[#0B3B24] font-extrabold text-base flex items-center space-x-2">
-                          <Users className="w-5 h-5 text-[#C5A059]" />
-                          <span>담당 컨설턴트 고유 코드 설정</span>
-                        </h3>
-                        <p className="text-xs text-slate-500 mt-1">예비 원장님이 자가진단 시작 페이지 및 상담사 배정에 실시간 연동되는 4자리 고유 코드 조합 리스트입니다.</p>
-                      </div>
-                      <span className="text-[11px] font-mono text-slate-400 bg-slate-50 border border-slate-200 rounded px-2.5 py-1 select-none">
-                        총 {Object.keys(consultantCodes).length}명 구성됨
-                      </span>
-                    </div>
-
-                    {consultantUpdateMessage && (
-                      <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs flex items-center space-x-2" id="consultant_success_banner">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                        <span className="font-semibold">{consultantUpdateMessage}</span>
-                      </div>
-                    )}
-
-                    {consultantUpdateError && (
-                      <div className="p-3.5 bg-red-50 border border-red-200 rounded-lg text-red-800 text-xs flex items-center space-x-2" id="consultant_error_banner">
-                        <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
-                        <span className="font-semibold">{consultantUpdateError}</span>
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                      
-                      {/* Left Column: Register New Consultant */}
-                      <form onSubmit={handleAddConsultant} className="lg:col-span-5 bg-slate-50 p-5 rounded-xl border border-slate-200/80 space-y-4" id="consultant_add_form_element">
-                        <h4 className="text-slate-800 font-extrabold text-xs uppercase tracking-wider border-b pb-2 border-slate-250 flex items-center space-x-1.5">
-                          <Plus className="w-4 h-4 text-[#C5A059]" />
-                          <span>컨설턴트 신규 가입 등록</span>
-                        </h4>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" id="consultant_add_fields">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 border-[#E5E7EB]">
                           <div>
-                            <label className="block text-slate-500 text-[10px] font-bold mb-1.5 uppercase font-sans" htmlFor="new_code_input_val">
-                              고유코드 (숫자 4자리)
-                            </label>
-                            <input
-                              id="new_code_input_val"
-                              type="text"
-                              maxLength={4}
-                              placeholder="예: 7777"
-                              value={newConsultantCode}
-                              onChange={(e) => setNewConsultantCode(e.target.value.replace(/\D/g, ""))}
-                              className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:border-[#C5A059]"
-                            />
+                            <h3 className="text-[#0B3B24] font-extrabold text-base flex items-center space-x-2">
+                              <Users className="w-5 h-5 text-[#C5A059]" />
+                              <span>담당 컨설턴트 고유 코드 설정</span>
+                            </h3>
+                            <p className="text-xs text-slate-500 mt-1">예비 원장님이 자가진단 시작 페이지 및 상담사 배정에 실시간 연동되는 4자리 고유 코드 조합 리스트입니다.</p>
                           </div>
-
-                          <div>
-                            <label className="block text-slate-500 text-[10px] font-bold mb-1.5 uppercase font-sans" htmlFor="new_name_input_val">
-                              컨설턴트 성명
-                            </label>
-                            <input
-                              id="new_name_input_val"
-                              type="text"
-                              placeholder="컨설턴트명과 직급 입력"
-                              value={newConsultantName}
-                              onChange={(e) => setNewConsultantName(e.target.value)}
-                              className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-xs focus:outline-none focus:border-[#C5A059]"
-                            />
-                          </div>
+                          <span className="text-[11px] font-mono text-slate-400 bg-slate-50 border border-slate-200 rounded px-2.5 py-1 select-none">
+                            총 {Object.keys(consultantCodes).length}명 구성됨
+                          </span>
                         </div>
 
-                        <button
-                          type="submit"
-                          className="w-full py-2.5 rounded bg-[#0B3B24] hover:bg-[#062919] text-white font-bold text-xs transition-all flex items-center justify-center space-x-1 border-0 cursor-pointer shadow-sm mt-2 font-sans"
-                        >
-                          <Plus className="w-3.5 h-3.5 text-[#C5A059]" />
-                          <span>컨설턴트 신규 추가 & 실시간 동기화</span>
-                        </button>
-                      </form>
+                        {consultantUpdateMessage && (
+                          <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs flex items-center space-x-2" id="consultant_success_banner">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                            <span className="font-semibold">{consultantUpdateMessage}</span>
+                          </div>
+                        )}
 
-                      {/* Right Column: Registered Codes List Grid */}
-                      <div className="lg:col-span-7 flex flex-col" id="consultants_list_area_intern">
-                        <h4 className="text-[#0B3B24] font-bold text-xs uppercase tracking-wider border-b pb-2 border-slate-200 mb-3 flex items-center space-x-1.5">
-                          <Users className="w-4 h-4 text-[#C5A059]" />
-                          <span>현재 등록 및 승인된 컨설턴트 고유 코드 리스트</span>
-                        </h4>
+                        {consultantUpdateError && (
+                          <div className="p-3.5 bg-red-50 border border-red-200 rounded-lg text-red-800 text-xs flex items-center space-x-2" id="consultant_error_banner">
+                            <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                            <span className="font-semibold">{consultantUpdateError}</span>
+                          </div>
+                        )}
 
-                        <div className="overflow-y-auto max-h-[220px] rounded-lg border border-slate-100 divide-y divide-slate-100 bg-white shadow-inner" id="consultants_roster_scroll_intern">
-                          {Object.entries(consultantCodes).length > 0 ? (
-                            Object.entries(consultantCodes).map(([code, nameVal]) => {
-                              const name = nameVal as string;
-                              const isEditing = editingCode === code;
-                              return (
-                                <div key={code} className="flex px-4 py-2.5 items-center justify-between hover:bg-slate-50 transition-colors min-h-[52px]">
-                                  {isEditing ? (
-                                    <div className="flex items-center space-x-2 w-full animate-fade-in">
-                                      <input
-                                        type="text"
-                                        maxLength={4}
-                                        value={editCodeValue}
-                                        onChange={(e) => setEditCodeValue(e.target.value.replace(/\D/g, ""))}
-                                        className="w-20 bg-white border border-slate-300 rounded px-2 py-1 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-[#C5A059]"
-                                        placeholder="코드"
-                                      />
-                                      <input
-                                        type="text"
-                                        value={editNameValue}
-                                        onChange={(e) => setEditNameValue(e.target.value)}
-                                        className="flex-1 bg-white border border-slate-300 rounded px-2 py-1 text-xs font-sans font-bold text-slate-800 focus:outline-none focus:border-[#C5A059]"
-                                        placeholder="이름"
-                                      />
-                                      <div className="flex items-center space-x-1 flex-shrink-0">
-                                        <button
-                                          type="button"
-                                          onClick={() => handleSaveEditConsultant(code)}
-                                          className="bg-[#0B3B24] hover:bg-[#062919] text-white px-2.5 py-1.5 rounded text-[11px] font-bold transition-all border-0 shadow-sm cursor-pointer"
-                                        >
-                                          저장
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={handleCancelEditConsultant}
-                                          className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1.5 rounded border border-slate-200 text-[11px] font-bold transition-all cursor-pointer"
-                                        >
-                                          취소
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : deletingConsultantCode === code ? (
-                                    <div className="flex items-center space-x-2 bg-rose-50 border border-rose-250 rounded-lg px-3 py-1.5 w-full animate-fade-in text-xs font-sans font-extrabold text-rose-800">
-                                      <AlertTriangle className="w-3.5 h-3.5 text-rose-500 flex-shrink-0 animate-pulse" />
-                                      <span className="flex-1 truncate select-none">'{name.replace(/\s*\(비활성\)$/, "")}' ({code}) 삭제할까요?</span>
-                                      <div className="flex items-center space-x-1 flex-shrink-0">
-                                        <button
-                                          type="button"
-                                          onClick={() => handleConfirmDeleteConsultant(code)}
-                                          className="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded text-[10px] font-bold border-0 cursor-pointer transition-all shadow-sm"
-                                        >
-                                          삭제
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => setDeletingConsultantCode(null)}
-                                          className="bg-slate-100 hover:bg-slate-200 text-slate-650 px-2.5 py-1 rounded border border-slate-200 text-[10px] font-bold transition-all cursor-pointer"
-                                        >
-                                          취소
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <>
-                                      <div className="flex items-center space-x-3 flex-1 min-w-0 pr-4">
-                                        <span className="text-[#C5A059] font-mono font-extrabold bg-[#C5A059]/10 px-2.5 py-0.5 rounded border border-[#C5A059]/30 text-xs shadow-sm select-all flex-shrink-0">
-                                          {code}
-                                        </span>
-                                        <span className={`font-extrabold text-xs truncate ${name.endsWith(" (비활성)") ? "text-slate-400 line-through" : "text-[#0B3B24]"}`}>
-                                          {name.replace(/\s*\(비활성\)$/, "")}
-                                        </span>
-                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold flex-shrink-0 ${name.endsWith(" (비활성)") ? "bg-slate-100 text-slate-500 border border-slate-200" : "bg-emerald-50 text-emerald-700 border border-emerald-250"}`}>
-                                          {name.endsWith(" (비활성)") ? "비활성" : "활성"}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center space-x-1.5 flex-shrink-0">
-                                        <button
-                                          type="button"
-                                          onClick={() => handleToggleConsultantActive(code)}
-                                          className={`px-2.5 py-1 rounded text-[10px] font-bold border transition-all cursor-pointer ${
-                                            name.endsWith(" (비활성)")
-                                              ? "bg-[#0B3B24] hover:bg-[#062919] text-white border-transparent"
-                                              : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
-                                          }`}
-                                          title={name.endsWith(" (비활성)") ? "활성화로 변경" : "비활성화로 변경"}
-                                        >
-                                          {name.endsWith(" (비활성)") ? "활성화" : "비활성화"}
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleStartEditConsultant(code, name)}
-                                          className="bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 px-2.5 py-1 rounded text-[10px] font-bold transition-all cursor-pointer flex items-center space-x-1"
-                                          title="코드/이름 수정"
-                                        >
-                                          <Edit2 className="w-3 h-3 text-slate-400" />
-                                          <span>수정</span>
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleDeleteConsultant(code)}
-                                          className="bg-rose-650 hover:bg-rose-700 text-white border-transparent px-2.5 py-1 rounded text-[10px] font-black transition-all cursor-pointer shadow-sm flex items-center space-x-1"
-                                          title="코드 삭제"
-                                        >
-                                          <Trash2 className="w-3 h-3 text-rose-100" />
-                                          <span>삭제</span>
-                                        </button>
-                                      </div>
-                                    </>
-                                  )}
-                                </div>
-                              );
-                            })
-                          ) : (
-                            <div className="text-center py-8 text-slate-400 text-xs">
-                              등록된 컨설턴트가 한 명도 없습니다. 새로운 컨설턴트를 등록해 주세요.
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+                          {/* Left Column: Register New Consultant */}
+                          <form onSubmit={handleAddConsultant} className="lg:col-span-5 bg-slate-50 p-5 rounded-xl border border-slate-200/80 space-y-4" id="consultant_add_form_element">
+                            <h4 className="text-slate-800 font-extrabold text-xs uppercase tracking-wider border-b pb-2 border-slate-250 flex items-center space-x-1.5">
+                              <Plus className="w-4 h-4 text-[#C5A059]" />
+                              <span>컨설턴트 신규 가입 등록</span>
+                            </h4>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" id="consultant_add_fields">
+                              <div>
+                                <label className="block text-slate-500 text-[10px] font-bold mb-1.5 uppercase font-sans" htmlFor="new_code_input_val">
+                                  고유코드 (숫자 4자리)
+                                </label>
+                                <input
+                                  id="new_code_input_val"
+                                  type="text"
+                                  maxLength={4}
+                                  placeholder="예: 7777"
+                                  value={newConsultantCode}
+                                  onChange={(e) => setNewConsultantCode(e.target.value.replace(/\D/g, ""))}
+                                  className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:border-[#C5A059]"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-slate-500 text-[10px] font-bold mb-1.5 uppercase font-sans" htmlFor="new_name_input_val">
+                                  컨설턴트 성명
+                                </label>
+                                <input
+                                  id="new_name_input_val"
+                                  type="text"
+                                  placeholder="컨설턴트명과 직급 입력"
+                                  value={newConsultantName}
+                                  onChange={(e) => setNewConsultantName(e.target.value)}
+                                  className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-xs focus:outline-none focus:border-[#C5A059]"
+                                />
+                              </div>
                             </div>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-400 mt-2 font-semibold font-sans font-sans">
-                          * 본 고유 매칭 설정은 데이터베이스에 전임 기록되며, 예비 원장님이 진단 세션 기입 시 자동 실시간 인출 분류 매칭에 반영됩니다.
-                        </p>
-                      </div>
 
-                    </div>
-                  </div>
+                            <button
+                              type="submit"
+                              className="w-full py-2.5 rounded bg-[#0B3B24] hover:bg-[#062919] text-white font-bold text-xs transition-all flex items-center justify-center space-x-1 border-0 cursor-pointer shadow-sm mt-2 font-sans"
+                            >
+                              <Plus className="w-3.5 h-3.5 text-[#C5A059]" />
+                              <span>컨설턴트 신규 추가 & 실시간 동기화</span>
+                            </button>
+                          </form>
+
+                          {/* Right Column: Registered Codes List Grid */}
+                          <div className="lg:col-span-7 flex flex-col" id="consultants_list_area_intern">
+                            <h4 className="text-[#0B3B24] font-bold text-xs uppercase tracking-wider border-b pb-2 border-slate-200 mb-3 flex items-center space-x-1.5">
+                              <Users className="w-4 h-4 text-[#C5A059]" />
+                              <span>현재 등록 및 승인된 컨설턴트 고유 코드 리스트</span>
+                            </h4>
+
+                            <div className="overflow-y-auto max-h-[220px] rounded-lg border border-slate-100 divide-y divide-slate-100 bg-white shadow-inner" id="consultants_roster_scroll_intern">
+                              {Object.entries(consultantCodes).length > 0 ? (
+                                Object.entries(consultantCodes).map(([code, nameVal]) => {
+                                  const name = nameVal as string;
+                                  const isEditing = editingCode === code;
+                                  return (
+                                    <div key={code} className="flex px-4 py-2.5 items-center justify-between hover:bg-slate-50 transition-colors min-h-[52px]">
+                                      {isEditing ? (
+                                        <div className="flex items-center space-x-2 w-full animate-fade-in">
+                                          <input
+                                            type="text"
+                                            maxLength={4}
+                                            value={editCodeValue}
+                                            onChange={(e) => setEditCodeValue(e.target.value.replace(/\D/g, ""))}
+                                            className="w-20 bg-white border border-slate-300 rounded px-2 py-1 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-[#C5A059]"
+                                            placeholder="코드"
+                                          />
+                                          <input
+                                            type="text"
+                                            value={editNameValue}
+                                            onChange={(e) => setEditNameValue(e.target.value)}
+                                            className="flex-1 bg-white border border-slate-300 rounded px-2 py-1 text-xs font-sans font-bold text-slate-800 focus:outline-none focus:border-[#C5A059]"
+                                            placeholder="이름"
+                                          />
+                                          <div className="flex items-center space-x-1 flex-shrink-0">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleSaveEditConsultant(code)}
+                                              className="bg-[#0B3B24] hover:bg-[#062919] text-white px-2.5 py-1.5 rounded text-[11px] font-bold transition-all border-0 shadow-sm cursor-pointer"
+                                            >
+                                              저장
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={handleCancelEditConsultant}
+                                              className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1.5 rounded border border-slate-200 text-[11px] font-bold transition-all cursor-pointer"
+                                            >
+                                              취소
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : deletingConsultantCode === code ? (
+                                        <div className="flex items-center space-x-2 bg-rose-50 border border-rose-250 rounded-lg px-3 py-1.5 w-full animate-fade-in text-xs font-sans font-extrabold text-rose-800">
+                                          <AlertTriangle className="w-3.5 h-3.5 text-rose-500 flex-shrink-0 animate-pulse" />
+                                          <span className="flex-1 truncate select-none">'{name.replace(/\s*\(비활성\)$/, "")}' ({code}) 삭제할까요?</span>
+                                          <div className="flex items-center space-x-1 flex-shrink-0">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleConfirmDeleteConsultant(code)}
+                                              className="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded text-[10px] font-bold border-0 cursor-pointer transition-all shadow-sm"
+                                            >
+                                              삭제
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => setDeletingConsultantCode(null)}
+                                              className="bg-slate-100 hover:bg-slate-200 text-slate-650 px-2.5 py-1 rounded border border-slate-200 text-[10px] font-bold transition-all cursor-pointer"
+                                            >
+                                              취소
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <>
+                                          <div className="flex items-center space-x-3 flex-1 min-w-0 pr-4">
+                                            <span className="text-[#C5A059] font-mono font-extrabold bg-[#C5A059]/10 px-2.5 py-0.5 rounded border border-[#C5A059]/30 text-xs shadow-sm select-all flex-shrink-0">
+                                              {code}
+                                            </span>
+                                            <span className={`font-extrabold text-xs truncate ${name.endsWith(" (비활성)") ? "text-slate-400 line-through" : "text-[#0B3B24]"}`}>
+                                              {name.replace(/\s*\(비활성\)$/, "")}
+                                            </span>
+                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold flex-shrink-0 ${name.endsWith(" (비활성)") ? "bg-slate-100 text-slate-500 border border-slate-200" : "bg-emerald-50 text-emerald-700 border border-emerald-250"}`}>
+                                              {name.endsWith(" (비활성)") ? "비활성" : "활성"}
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center space-x-1.5 flex-shrink-0">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleToggleConsultantActive(code)}
+                                              className={`px-2.5 py-1 rounded text-[10px] font-bold border transition-all cursor-pointer ${name.endsWith(" (비활성)")
+                                                  ? "bg-[#0B3B24] hover:bg-[#062919] text-white border-transparent"
+                                                  : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
+                                                }`}
+                                              title={name.endsWith(" (비활성)") ? "활성화로 변경" : "비활성화로 변경"}
+                                            >
+                                              {name.endsWith(" (비활성)") ? "활성화" : "비활성화"}
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleStartEditConsultant(code, name)}
+                                              className="bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 px-2.5 py-1 rounded text-[10px] font-bold transition-all cursor-pointer flex items-center space-x-1"
+                                              title="코드/이름 수정"
+                                            >
+                                              <Edit2 className="w-3 h-3 text-slate-400" />
+                                              <span>수정</span>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleDeleteConsultant(code)}
+                                              className="bg-rose-650 hover:bg-rose-700 text-white border-transparent px-2.5 py-1 rounded text-[10px] font-black transition-all cursor-pointer shadow-sm flex items-center space-x-1"
+                                              title="코드 삭제"
+                                            >
+                                              <Trash2 className="w-3 h-3 text-rose-100" />
+                                              <span>삭제</span>
+                                            </button>
+                                          </div>
+                                        </>
+                                      )}
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                <div className="text-center py-8 text-slate-400 text-xs">
+                                  등록된 컨설턴트가 한 명도 없습니다. 새로운 컨설턴트를 등록해 주세요.
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-2 font-semibold font-sans font-sans">
+                              * 본 고유 매칭 설정은 데이터베이스에 전임 기록되며, 예비 원장님이 진단 세션 기입 시 자동 실시간 인출 분류 매칭에 반영됩니다.
+                            </p>
+                          </div>
+
+                        </div>
+                      </div>
                     </motion.div>
                   )}
 
@@ -6181,226 +6217,223 @@ export default function App() {
                     >
                       {/* Excel Data Integration Panel */}
                       <div className="bg-white border border-[#E5E7EB] rounded-xl shadow-md p-6 space-y-6" id="admin_excel_integration_panel">
-                    <div>
-                      <h3 className="text-lg font-bold text-[#0B3B24] flex items-center space-x-2">
-                        <FileSpreadsheet className="w-5 h-5 text-[#C5A059]" />
-                        <span>데이터 입출력 관리 (Excel 연동)</span>
-                      </h3>
-                      <p className="text-xs text-slate-500 mt-1">창업 진단평가 결과와 진단 문항 정보를 엑셀로 백업하거나 실시간으로 일괄 업로드 등록할 수 있습니다.</p>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                      {/* 진단 평가 관리 */}
-                      <div className="border border-slate-200 rounded-xl p-5 bg-slate-50/50 space-y-3 flex flex-col justify-between">
                         <div>
-                          <div className="flex items-center space-x-2 border-b border-slate-200 pb-2 mb-1">
-                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
-                            <h4 className="text-xs font-bold text-[#0B3B24] uppercase tracking-wider">신청자 데이터베이스</h4>
-                          </div>
-                          <p className="text-[11px] text-slate-500 leading-normal font-medium">
-                            공지된 모든 신청자(진단평가) 정보를 다운로드하거나 새 데이터를 일괄 업로드하여 등록합니다. 일괄 등록 양식은 다운로드한 엑셀 파일과 같은 규격을 사용합니다.
-                          </p>
+                          <h3 className="text-lg font-bold text-[#0B3B24] flex items-center space-x-2">
+                            <FileSpreadsheet className="w-5 h-5 text-[#C5A059]" />
+                            <span>데이터 입출력 관리 (Excel 연동)</span>
+                          </h3>
+                          <p className="text-xs text-slate-500 mt-1">창업 진단평가 결과와 진단 문항 정보를 엑셀로 백업하거나 실시간으로 일괄 업로드 등록할 수 있습니다.</p>
                         </div>
-                        
-                        <div>
-                          <div className="grid grid-cols-3 gap-1.5 pt-2">
-                            <button
-                              type="button"
-                              onClick={handleDownloadXlsx}
-                              className="bg-white hover:bg-slate-50 text-slate-700 font-bold py-2 px-1 rounded text-xs border border-slate-300 transition-all flex items-center justify-center space-x-1"
-                              title="엑셀 양식 다운로드"
-                            >
-                              <Download className="w-3.5 h-3.5 text-[#C5A059]" />
-                              <span>다운로드</span>
-                            </button>
 
-                            <label className="bg-[#0B3B24] hover:bg-[#062919] text-white font-bold py-2 px-1 rounded text-xs transition-all flex items-center justify-center space-x-1 cursor-pointer text-center">
-                              <Upload className="w-3.5 h-3.5 text-[#C5A059]" />
-                              <span>일괄등록</span>
-                              <input
-                                type="file"
-                                accept=".xlsx, .xls"
-                                onChange={handleUploadApplicantsXlsx}
-                                className="hidden"
-                              />
-                            </label>
-
-                            <button
-                              type="button"
-                              onClick={handleClearApplicants}
-                              className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold py-2 px-1 rounded text-xs border border-rose-200 transition-all flex items-center justify-center space-x-1"
-                              title="기존 신청자 전체 삭제"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>전체삭제</span>
-                            </button>
-                          </div>
-
-                          {excelStatus.applicants && (
-                            <div className={`mt-3 p-2.5 rounded-lg text-xs flex flex-col space-y-0.5 border font-sans ${
-                              excelStatus.applicants.success 
-                                ? "bg-emerald-50 border-emerald-250 text-emerald-800" 
-                                : "bg-red-50 border-red-200 text-red-800"
-                            }`}>
-                              <div className="flex items-center space-x-1.5 font-extrabold text-[11px]">
-                                {excelStatus.applicants.success ? (
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                                ) : (
-                                  <AlertCircle className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
-                                )}
-                                <span>{excelStatus.applicants.success ? "엑셀 일괄등록 완료" : "업로드 실패"}</span>
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                          {/* 진단 평가 관리 */}
+                          <div className="border border-slate-200 rounded-xl p-5 bg-slate-50/50 space-y-3 flex flex-col justify-between">
+                            <div>
+                              <div className="flex items-center space-x-2 border-b border-slate-200 pb-2 mb-1">
+                                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+                                <h4 className="text-xs font-bold text-[#0B3B24] uppercase tracking-wider">신청자 데이터베이스</h4>
                               </div>
-                              <p className="text-[10.5px] font-medium leading-relaxed mt-0.5" style={{ paddingLeft: "20px" }}>
-                                {excelStatus.applicants.success 
-                                  ? `정상적으로 총 ${excelStatus.applicants.count}건의 신청자 데이터가 반영 및 등록완료 되었습니다. (${excelStatus.applicants.time})`
-                                  : `오류 원인: ${excelStatus.applicants.error} (${excelStatus.applicants.time})`}
+                              <p className="text-[11px] text-slate-500 leading-normal font-medium">
+                                공지된 모든 신청자(진단평가) 정보를 다운로드하거나 새 데이터를 일괄 업로드하여 등록합니다. 일괄 등록 양식은 다운로드한 엑셀 파일과 같은 규격을 사용합니다.
                               </p>
                             </div>
-                          )}
-                        </div>
-                      </div>
 
-                      {/* 진단 문항 관리 */}
-                      <div className="border border-slate-200 rounded-xl p-5 bg-slate-50/50 space-y-3 flex flex-col justify-between">
-                        <div>
-                          <div className="flex items-center space-x-2 border-b border-slate-200 pb-2 mb-1">
-                            <div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
-                            <h4 className="text-xs font-bold text-[#0B3B24] uppercase tracking-wider">진단 질문 문항 관리</h4>
-                          </div>
-                          <p className="text-[11px] text-slate-500 leading-normal font-medium">
-                            진단 시 화면에 노출되는 신규 창업 및 브랜드 전환용 질문지를 백업하고 수정하여 반영합니다. 수정 또는 신규 추가한 엑셀 파일을 업로드하여 일괄 문항을 실시간 등록할 수 있습니다.
-                          </p>
-                        </div>
-                        
-                        <div>
-                          <div className="grid grid-cols-3 gap-1.5 pt-2">
-                            <button
-                              type="button"
-                              onClick={handleDownloadQuestionsXlsx}
-                              className="bg-white hover:bg-slate-50 text-slate-700 font-bold py-2 px-1 rounded text-xs border border-slate-300 transition-all flex items-center justify-center space-x-1"
-                              title="엑셀 양식 다운로드"
-                            >
-                              <Download className="w-3.5 h-3.5 text-[#C5A059]" />
-                              <span>다운로드</span>
-                            </button>
+                            <div>
+                              <div className="grid grid-cols-3 gap-1.5 pt-2">
+                                <button
+                                  type="button"
+                                  onClick={handleDownloadXlsx}
+                                  className="bg-white hover:bg-slate-50 text-slate-700 font-bold py-2 px-1 rounded text-xs border border-slate-300 transition-all flex items-center justify-center space-x-1"
+                                  title="엑셀 양식 다운로드"
+                                >
+                                  <Download className="w-3.5 h-3.5 text-[#C5A059]" />
+                                  <span>다운로드</span>
+                                </button>
 
-                            <label className="bg-[#0B3B24]/90 hover:bg-[#0B3B24] text-white font-bold py-2 px-1 rounded text-xs transition-all flex items-center justify-center space-x-1 cursor-pointer text-center">
-                              <Upload className="w-3.5 h-3.5 text-[#C5A059]" />
-                              <span>일괄등록</span>
-                              <input
-                                type="file"
-                                accept=".xlsx, .xls"
-                                onChange={handleUploadQuestionsXlsx}
-                                className="hidden"
-                              />
-                            </label>
+                                <label className="bg-[#0B3B24] hover:bg-[#062919] text-white font-bold py-2 px-1 rounded text-xs transition-all flex items-center justify-center space-x-1 cursor-pointer text-center">
+                                  <Upload className="w-3.5 h-3.5 text-[#C5A059]" />
+                                  <span>일괄등록</span>
+                                  <input
+                                    type="file"
+                                    accept=".xlsx, .xls"
+                                    onChange={handleUploadApplicantsXlsx}
+                                    className="hidden"
+                                  />
+                                </label>
 
-                            <button
-                              type="button"
-                              onClick={handleClearQuestions}
-                              className="bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold py-2 px-1 rounded text-xs border border-amber-200 transition-all flex items-center justify-center space-x-1"
-                              title="질문지 기본 세트 복원"
-                            >
-                              <RotateCcw className="w-3.5 h-3.5" />
-                              <span>기본복원</span>
-                            </button>
-                          </div>
-
-                          {excelStatus.questions && (
-                            <div className={`mt-3 p-2.5 rounded-lg text-xs flex flex-col space-y-0.5 border font-sans ${
-                              excelStatus.questions.success 
-                                ? "bg-emerald-50 border-emerald-250 text-emerald-800" 
-                                : "bg-red-50 border-red-200 text-red-800"
-                            }`}>
-                              <div className="flex items-center space-x-1.5 font-extrabold text-[11px]">
-                                {excelStatus.questions.success ? (
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                                ) : (
-                                  <AlertCircle className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
-                                )}
-                                <span>{excelStatus.questions.success ? "엑셀 질문문항 교체완료" : "업로드 실패"}</span>
+                                <button
+                                  type="button"
+                                  onClick={handleClearApplicants}
+                                  className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold py-2 px-1 rounded text-xs border border-rose-200 transition-all flex items-center justify-center space-x-1"
+                                  title="기존 신청자 전체 삭제"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>전체삭제</span>
+                                </button>
                               </div>
-                              <p className="text-[10.5px] font-medium leading-relaxed mt-0.5" style={{ paddingLeft: "20px" }}>
-                                {excelStatus.questions.success 
-                                  ? `신규 창업 ${excelStatus.questions.newFranchiseCount}개, 브랜드 전환 ${excelStatus.questions.brandSwitchCount}개 질문 전체 셋이 즉시 반영되었습니다. (${excelStatus.questions.time})`
-                                  : `오류 원인: ${excelStatus.questions.error} (${excelStatus.questions.time})`}
+
+                              {excelStatus.applicants && (
+                                <div className={`mt-3 p-2.5 rounded-lg text-xs flex flex-col space-y-0.5 border font-sans ${excelStatus.applicants.success
+                                    ? "bg-emerald-50 border-emerald-250 text-emerald-800"
+                                    : "bg-red-50 border-red-200 text-red-800"
+                                  }`}>
+                                  <div className="flex items-center space-x-1.5 font-extrabold text-[11px]">
+                                    {excelStatus.applicants.success ? (
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                                    ) : (
+                                      <AlertCircle className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
+                                    )}
+                                    <span>{excelStatus.applicants.success ? "엑셀 일괄등록 완료" : "업로드 실패"}</span>
+                                  </div>
+                                  <p className="text-[10.5px] font-medium leading-relaxed mt-0.5" style={{ paddingLeft: "20px" }}>
+                                    {excelStatus.applicants.success
+                                      ? `정상적으로 총 ${excelStatus.applicants.count}건의 신청자 데이터가 반영 및 등록완료 되었습니다. (${excelStatus.applicants.time})`
+                                      : `오류 원인: ${excelStatus.applicants.error} (${excelStatus.applicants.time})`}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 진단 문항 관리 */}
+                          <div className="border border-slate-200 rounded-xl p-5 bg-slate-50/50 space-y-3 flex flex-col justify-between">
+                            <div>
+                              <div className="flex items-center space-x-2 border-b border-slate-200 pb-2 mb-1">
+                                <div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
+                                <h4 className="text-xs font-bold text-[#0B3B24] uppercase tracking-wider">진단 질문 문항 관리</h4>
+                              </div>
+                              <p className="text-[11px] text-slate-500 leading-normal font-medium">
+                                진단 시 화면에 노출되는 신규 창업 및 브랜드 전환용 질문지를 백업하고 수정하여 반영합니다. 수정 또는 신규 추가한 엑셀 파일을 업로드하여 일괄 문항을 실시간 등록할 수 있습니다.
                               </p>
                             </div>
-                          )}
-                        </div>
-                      </div>
 
-                      {/* 선택지 점수별 처방 코멘트 일괄 관리 */}
-                      <div className="border border-slate-200 rounded-xl p-5 bg-slate-50/50 space-y-3 flex flex-col justify-between" id="admin_comments_excel_card">
-                        <div>
-                          <div className="flex items-center space-x-2 border-b border-slate-200 pb-2 mb-1">
-                            <div className="w-2.5 h-2.5 rounded-full bg-[#C5A059]"></div>
-                            <h4 className="text-xs font-bold text-[#0B3B24] uppercase tracking-wider">처방 코멘트 일괄 관리</h4>
-                          </div>
-                          <p className="text-[11px] text-slate-500 leading-normal font-medium">
-                            진단 결과지의 질문 및 답변별 전문가 보완 처방 코멘트 일괄 세트를 엑셀 다운로드하거나, 엑셀 파일로 수정하여 업로드 시 시스템 메시지를 실시간으로 일괄 등록 업데이트합니다.
-                          </p>
-                        </div>
-                        
-                        <div>
-                          <div className="grid grid-cols-3 gap-1.5 pt-2">
-                            <button
-                              type="button"
-                              onClick={handleDownloadCommentsXlsx}
-                              className="bg-white hover:bg-slate-50 text-slate-700 font-bold py-2 px-1 rounded text-xs border border-slate-300 transition-all flex items-center justify-center space-x-1"
-                              title="엑셀 양식 다운로드"
-                            >
-                              <Download className="w-3.5 h-3.5 text-[#C5A059]" />
-                              <span>다운로드</span>
-                            </button>
+                            <div>
+                              <div className="grid grid-cols-3 gap-1.5 pt-2">
+                                <button
+                                  type="button"
+                                  onClick={handleDownloadQuestionsXlsx}
+                                  className="bg-white hover:bg-slate-50 text-slate-700 font-bold py-2 px-1 rounded text-xs border border-slate-300 transition-all flex items-center justify-center space-x-1"
+                                  title="엑셀 양식 다운로드"
+                                >
+                                  <Download className="w-3.5 h-3.5 text-[#C5A059]" />
+                                  <span>다운로드</span>
+                                </button>
 
-                            <label className="bg-[#0B3B24] hover:bg-[#062919] text-white font-bold py-2 px-1 rounded text-xs transition-all flex items-center justify-center space-x-1 cursor-pointer text-center">
-                              <Upload className="w-3.5 h-3.5 text-[#C5A059]" />
-                              <span>일괄등록</span>
-                              <input
-                                type="file"
-                                accept=".xlsx, .xls"
-                                onChange={handleUploadCommentsXlsx}
-                                className="hidden"
-                              />
-                            </label>
+                                <label className="bg-[#0B3B24]/90 hover:bg-[#0B3B24] text-white font-bold py-2 px-1 rounded text-xs transition-all flex items-center justify-center space-x-1 cursor-pointer text-center">
+                                  <Upload className="w-3.5 h-3.5 text-[#C5A059]" />
+                                  <span>일괄등록</span>
+                                  <input
+                                    type="file"
+                                    accept=".xlsx, .xls"
+                                    onChange={handleUploadQuestionsXlsx}
+                                    className="hidden"
+                                  />
+                                </label>
 
-                            <button
-                              type="button"
-                              onClick={handleClearComments}
-                              className="bg-[#C5A059]/10 hover:bg-[#C5A059]/20 text-[#C5A059] font-bold py-2 px-1 rounded text-xs border border-[#C5A059]/30 transition-all flex items-center justify-center space-x-1"
-                              title="해설 코멘트 기본값 복원"
-                            >
-                              <RotateCcw className="w-3.5 h-3.5" />
-                              <span>기본복원</span>
-                            </button>
-                          </div>
-
-                          {excelStatus.comments && (
-                            <div className={`mt-3 p-2.5 rounded-lg text-xs flex flex-col space-y-0.5 border font-sans ${
-                              excelStatus.comments.success 
-                                ? "bg-emerald-50 border-emerald-250 text-emerald-800" 
-                                : "bg-red-50 border-red-200 text-red-800"
-                            }`}>
-                              <div className="flex items-center space-x-1.5 font-extrabold text-[11px]">
-                                {excelStatus.comments.success ? (
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                                ) : (
-                                  <AlertCircle className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
-                                )}
-                                <span>{excelStatus.comments.success ? "처방 코멘트 등록 완료" : "업로드 실패"}</span>
+                                <button
+                                  type="button"
+                                  onClick={handleClearQuestions}
+                                  className="bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold py-2 px-1 rounded text-xs border border-amber-200 transition-all flex items-center justify-center space-x-1"
+                                  title="질문지 기본 세트 복원"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                  <span>기본복원</span>
+                                </button>
                               </div>
-                              <p className="text-[10.5px] font-medium leading-relaxed mt-0.5" style={{ paddingLeft: "20px" }}>
-                                {excelStatus.comments.success 
-                                  ? `총 ${excelStatus.comments.count}개의 점수별 전문가 추가 코멘트가 영구교체완료 및 실시간 바인딩 되었습니다. (${excelStatus.comments.time})`
-                                  : `오류 원인: ${excelStatus.comments.error} (${excelStatus.comments.time})`}
+
+                              {excelStatus.questions && (
+                                <div className={`mt-3 p-2.5 rounded-lg text-xs flex flex-col space-y-0.5 border font-sans ${excelStatus.questions.success
+                                    ? "bg-emerald-50 border-emerald-250 text-emerald-800"
+                                    : "bg-red-50 border-red-200 text-red-800"
+                                  }`}>
+                                  <div className="flex items-center space-x-1.5 font-extrabold text-[11px]">
+                                    {excelStatus.questions.success ? (
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                                    ) : (
+                                      <AlertCircle className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
+                                    )}
+                                    <span>{excelStatus.questions.success ? "엑셀 질문문항 교체완료" : "업로드 실패"}</span>
+                                  </div>
+                                  <p className="text-[10.5px] font-medium leading-relaxed mt-0.5" style={{ paddingLeft: "20px" }}>
+                                    {excelStatus.questions.success
+                                      ? `신규 창업 ${excelStatus.questions.newFranchiseCount}개, 브랜드 전환 ${excelStatus.questions.brandSwitchCount}개 질문 전체 셋이 즉시 반영되었습니다. (${excelStatus.questions.time})`
+                                      : `오류 원인: ${excelStatus.questions.error} (${excelStatus.questions.time})`}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 선택지 점수별 처방 코멘트 일괄 관리 */}
+                          <div className="border border-slate-200 rounded-xl p-5 bg-slate-50/50 space-y-3 flex flex-col justify-between" id="admin_comments_excel_card">
+                            <div>
+                              <div className="flex items-center space-x-2 border-b border-slate-200 pb-2 mb-1">
+                                <div className="w-2.5 h-2.5 rounded-full bg-[#C5A059]"></div>
+                                <h4 className="text-xs font-bold text-[#0B3B24] uppercase tracking-wider">처방 코멘트 일괄 관리</h4>
+                              </div>
+                              <p className="text-[11px] text-slate-500 leading-normal font-medium">
+                                진단 결과지의 질문 및 답변별 전문가 보완 처방 코멘트 일괄 세트를 엑셀 다운로드하거나, 엑셀 파일로 수정하여 업로드 시 시스템 메시지를 실시간으로 일괄 등록 업데이트합니다.
                               </p>
                             </div>
-                          )}
+
+                            <div>
+                              <div className="grid grid-cols-3 gap-1.5 pt-2">
+                                <button
+                                  type="button"
+                                  onClick={handleDownloadCommentsXlsx}
+                                  className="bg-white hover:bg-slate-50 text-slate-700 font-bold py-2 px-1 rounded text-xs border border-slate-300 transition-all flex items-center justify-center space-x-1"
+                                  title="엑셀 양식 다운로드"
+                                >
+                                  <Download className="w-3.5 h-3.5 text-[#C5A059]" />
+                                  <span>다운로드</span>
+                                </button>
+
+                                <label className="bg-[#0B3B24] hover:bg-[#062919] text-white font-bold py-2 px-1 rounded text-xs transition-all flex items-center justify-center space-x-1 cursor-pointer text-center">
+                                  <Upload className="w-3.5 h-3.5 text-[#C5A059]" />
+                                  <span>일괄등록</span>
+                                  <input
+                                    type="file"
+                                    accept=".xlsx, .xls"
+                                    onChange={handleUploadCommentsXlsx}
+                                    className="hidden"
+                                  />
+                                </label>
+
+                                <button
+                                  type="button"
+                                  onClick={handleClearComments}
+                                  className="bg-[#C5A059]/10 hover:bg-[#C5A059]/20 text-[#C5A059] font-bold py-2 px-1 rounded text-xs border border-[#C5A059]/30 transition-all flex items-center justify-center space-x-1"
+                                  title="해설 코멘트 기본값 복원"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                  <span>기본복원</span>
+                                </button>
+                              </div>
+
+                              {excelStatus.comments && (
+                                <div className={`mt-3 p-2.5 rounded-lg text-xs flex flex-col space-y-0.5 border font-sans ${excelStatus.comments.success
+                                    ? "bg-emerald-50 border-emerald-250 text-emerald-800"
+                                    : "bg-red-50 border-red-200 text-red-800"
+                                  }`}>
+                                  <div className="flex items-center space-x-1.5 font-extrabold text-[11px]">
+                                    {excelStatus.comments.success ? (
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                                    ) : (
+                                      <AlertCircle className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
+                                    )}
+                                    <span>{excelStatus.comments.success ? "처방 코멘트 등록 완료" : "업로드 실패"}</span>
+                                  </div>
+                                  <p className="text-[10.5px] font-medium leading-relaxed mt-0.5" style={{ paddingLeft: "20px" }}>
+                                    {excelStatus.comments.success
+                                      ? `총 ${excelStatus.comments.count}개의 점수별 전문가 추가 코멘트가 영구교체완료 및 실시간 바인딩 되었습니다. (${excelStatus.comments.time})`
+                                      : `오류 원인: ${excelStatus.comments.error} (${excelStatus.comments.time})`}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
                     </motion.div>
                   )}
 
@@ -6430,11 +6463,10 @@ export default function App() {
                             <button
                               type="button"
                               onClick={() => setIsBulkMode(false)}
-                              className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all duration-200 flex items-center space-x-1 ${
-                                !isBulkMode
+                              className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all duration-200 flex items-center space-x-1 ${!isBulkMode
                                   ? "bg-white text-[#0B3B24] shadow-sm font-black"
                                   : "text-slate-500 hover:text-slate-800"
-                              }`}
+                                }`}
                             >
                               <span>개별 등록</span>
                             </button>
@@ -6446,11 +6478,10 @@ export default function App() {
                                 setBulkVideos([]);
                                 setBulkInputText("");
                               }}
-                              className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all duration-200 flex items-center space-x-1 ${
-                                isBulkMode
+                              className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all duration-200 flex items-center space-x-1 ${isBulkMode
                                   ? "bg-[#0B3B24] text-white shadow-sm font-black"
                                   : "text-slate-500 hover:text-slate-800"
-                              }`}
+                                }`}
                             >
                               <span className="relative flex h-2 w-2 mr-1">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -6499,12 +6530,12 @@ export default function App() {
                                     className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs focus:outline-none focus:border-[#C5A059] h-12 font-medium"
                                   />
                                 </div>
-                                
+
                                 <div className="flex items-center space-x-2 bg-slate-50 border border-slate-100 p-2 rounded-lg">
-                                  <input 
-                                    type="checkbox" 
-                                    id="allow-download" 
-                                    checked={brochureAllowDownload} 
+                                  <input
+                                    type="checkbox"
+                                    id="allow-download"
+                                    checked={brochureAllowDownload}
                                     onChange={(e) => setBrochureAllowDownload(e.target.checked)}
                                     className="w-3.5 h-3.5 accent-[#C5A059] cursor-pointer"
                                   />
@@ -6512,11 +6543,11 @@ export default function App() {
                                     사용자 화면(브랜드 알아보기)에서 이 브로슈어의 다운로드 버튼 노출 허용
                                   </label>
                                 </div>
-                                
+
                                 <div className="grid grid-cols-1 gap-3">
                                   <div>
                                     <label className="block text-[11px] font-bold text-slate-600 mb-1">가맹 브로슈어 첨부 (로컬 PDF/이미지 파일 다중 선택 가능)</label>
-                                    <div 
+                                    <div
                                       onDragOver={(e) => {
                                         e.preventDefault();
                                         setIsDraggingBrochure(true);
@@ -6536,15 +6567,13 @@ export default function App() {
                                           brochureInputRef.current?.click();
                                         }
                                       }}
-                                      className={`border-2 border-dashed rounded-xl p-3 text-center transition-all duration-200 flex flex-col items-center justify-center min-h-[110px] ${
-                                        brochureFiles.length > 0 ? "" : "cursor-pointer"
-                                      } ${
-                                        isDraggingBrochure 
-                                          ? "border-[#C5A059] bg-[#0B3B24]/5 scale-[1.02]" 
-                                          : brochureFiles.length > 0 
-                                          ? "border-emerald-500 bg-emerald-50/30" 
-                                          : "border-slate-300 hover:border-[#0B3B24] bg-slate-50/50 hover:bg-slate-50"
-                                      }`}
+                                      className={`border-2 border-dashed rounded-xl p-3 text-center transition-all duration-200 flex flex-col items-center justify-center min-h-[110px] ${brochureFiles.length > 0 ? "" : "cursor-pointer"
+                                        } ${isDraggingBrochure
+                                          ? "border-[#C5A059] bg-[#0B3B24]/5 scale-[1.02]"
+                                          : brochureFiles.length > 0
+                                            ? "border-emerald-500 bg-emerald-50/30"
+                                            : "border-slate-300 hover:border-[#0B3B24] bg-slate-50/50 hover:bg-slate-50"
+                                        }`}
                                     >
                                       <input
                                         ref={brochureInputRef}
@@ -6561,14 +6590,8 @@ export default function App() {
                                         }}
                                         className="hidden"
                                       />
-                                      
-                                      {isProcessingPdf ? (
-                                        <div className="flex flex-col items-center justify-center p-4">
-                                          <RefreshCw className="w-6 h-6 animate-spin text-[#C5A059] mb-2" />
-                                          <p className="text-[11px] font-bold text-slate-700">PDF 파일을 플립북용 이미지로 자동 변환 중입니다...</p>
-                                          <p className="text-[9px] text-slate-500 mt-1">페이지 수가 많을 경우 수 초가 소요될 수 있습니다.</p>
-                                        </div>
-                                      ) : brochureFiles.length > 0 ? (
+
+                                      {brochureFiles.length > 0 ? (
                                         <div className="flex flex-col items-center space-y-2 w-full max-h-[200px] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                                           <p className="text-[10px] text-slate-500 font-bold self-start mt-1">파일 순서를 마우스로 드래그하여 변경할 수 있습니다.</p>
                                           <div className="w-full space-y-1">
@@ -6637,17 +6660,16 @@ export default function App() {
                                 </div>
                                 {/* Real-time File Upload & Status Feedback */}
                                 {brochureUploadFeedback.status !== "idle" && (
-                                  <motion.div 
+                                  <motion.div
                                     initial={{ opacity: 0, y: -5 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: -5 }}
-                                    className={`p-2.5 rounded-lg flex items-center space-x-2 text-[11px] font-extrabold border ${
-                                      brochureUploadFeedback.status === "uploading"
+                                    className={`p-2.5 rounded-lg flex items-center space-x-2 text-[11px] font-extrabold border ${brochureUploadFeedback.status === "uploading"
                                         ? "bg-amber-50 border-amber-200 text-amber-800"
                                         : brochureUploadFeedback.status === "success"
-                                        ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                                        : "bg-rose-50 border-rose-200 text-rose-800"
-                                    }`}
+                                          ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                                          : "bg-rose-50 border-rose-200 text-rose-800"
+                                      }`}
                                   >
                                     {brochureUploadFeedback.status === "uploading" && (
                                       <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-600 shrink-0" />
@@ -6683,48 +6705,111 @@ export default function App() {
                                   <p className="text-[10px] text-slate-400 italic">등록된 맞춤 브로슈어가 없습니다. (기본 책자가 표시됩니다)</p>
                                 ) : (
                                   adminBrochures.map((b) => (
-                                    <div key={b.id} className="p-2.5 bg-white border rounded-lg flex items-center justify-between text-xs hover:border-[#C5A059]/40 transition-colors">
-                                      <div className="truncate pr-2">
-                                        <span className="font-extrabold text-slate-700 block truncate">{b.title}</span>
-                                        <span className="text-[9px] text-slate-400 font-mono truncate block">{b.filename || b.url}</span>
-                                      </div>
-                                      <div className="flex items-center space-x-1.5 shrink-0">
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const targetUrl = b.url || (b.urls && b.urls.length > 0 ? b.urls[0] : null);
-                                            if (!targetUrl) return;
-                                            
-                                            if (targetUrl.startsWith("data:")) {
-                                              const win = window.open();
-                                              if (win) {
-                                                win.document.write(`
-                                                  <html>
-                                                    <head><title>미리보기 - ${b.title}</title></head>
-                                                    <body style="margin:0;display:flex;justify-content:center;align-items:center;background:#000;">
-                                                      <img src="${targetUrl}" style="max-width:100%;max-height:100vh;object-fit:contain;" />
-                                                    </body>
-                                                  </html>
-                                                `);
-                                                win.document.close();
-                                              }
-                                            } else {
-                                              window.open(targetUrl, "_blank");
-                                            }
-                                          }}
-                                          className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 text-[10px] font-bold rounded cursor-pointer transition-colors flex items-center space-x-1"
-                                        >
-                                          <Eye className="w-3 h-3 text-emerald-600" />
-                                          <span>미리보기</span>
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleDeleteBrochure(b.id)}
-                                          className="px-2 py-1 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 text-[10px] font-bold rounded cursor-pointer transition-colors"
-                                        >
-                                          삭제
-                                        </button>
-                                      </div>
+                                    <div key={b.id} className="p-2.5 bg-white border rounded-lg flex flex-col justify-center text-xs hover:border-[#C5A059]/40 transition-colors">
+                                      {editingBrochureId === b.id ? (
+                                        <div className="space-y-2">
+                                          <input
+                                            type="text"
+                                            value={editBrochureData.title}
+                                            onChange={(e) => setEditBrochureData({ ...editBrochureData, title: e.target.value })}
+                                            className="w-full border rounded px-2 py-1 text-xs"
+                                            placeholder="제목"
+                                          />
+                                          <input
+                                            type="text"
+                                            value={editBrochureData.description}
+                                            onChange={(e) => setEditBrochureData({ ...editBrochureData, description: e.target.value })}
+                                            className="w-full border rounded px-2 py-1 text-xs"
+                                            placeholder="설명"
+                                          />
+                                          <div className="flex items-center space-x-2">
+                                            <input
+                                              type="checkbox"
+                                              checked={editBrochureData.allowDownload}
+                                              onChange={(e) => setEditBrochureData({ ...editBrochureData, allowDownload: e.target.checked })}
+                                              className="w-3 h-3 cursor-pointer"
+                                            />
+                                            <span className="text-[10px]">다운로드 허용</span>
+                                          </div>
+                                          <div className="flex justify-end space-x-2 pt-1">
+                                            <button
+                                              type="button"
+                                              onClick={() => setEditingBrochureId(null)}
+                                              className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold"
+                                            >
+                                              취소
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleSaveBrochureEdit(b.id)}
+                                              className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold flex items-center space-x-1"
+                                            >
+                                              <Save className="w-3 h-3" />
+                                              <span>저장</span>
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center justify-between w-full">
+                                          <div className="flex items-center space-x-2 overflow-hidden pr-2">
+                                            {b.thumbnailUrl && (
+                                              <img src={b.thumbnailUrl} alt="thumb" className="w-8 h-10 object-cover rounded shadow-sm shrink-0 border border-slate-200" />
+                                            )}
+                                            <div className="truncate">
+                                              <span className="font-extrabold text-slate-700 block truncate">{b.title}</span>
+                                              <span className="text-[9px] text-slate-400 font-mono truncate block">{b.filename || b.url}</span>
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center space-x-1.5 shrink-0">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const targetUrl = b.url || (b.urls && b.urls.length > 0 ? b.urls[0] : null);
+                                                if (!targetUrl) return;
+
+                                                if (targetUrl.startsWith("data:")) {
+                                                  const win = window.open();
+                                                  if (win) {
+                                                    win.document.write(`
+                                                      <html>
+                                                        <head><title>미리보기 - ${b.title}</title></head>
+                                                        <body style="margin:0;display:flex;justify-content:center;align-items:center;background:#000;">
+                                                          <img src="${targetUrl}" style="max-width:100%;max-height:100vh;object-fit:contain;" />
+                                                        </body>
+                                                      </html>
+                                                    `);
+                                                    win.document.close();
+                                                  }
+                                                } else {
+                                                  window.open(targetUrl, "_blank");
+                                                }
+                                              }}
+                                              className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 text-[10px] font-bold rounded cursor-pointer transition-colors flex items-center space-x-1"
+                                            >
+                                              <Eye className="w-3 h-3 text-emerald-600" />
+                                              <span className="hidden sm:inline">미리보기</span>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setEditingBrochureId(b.id);
+                                                setEditBrochureData({ title: b.title, description: b.description || "", allowDownload: b.allowDownload !== false });
+                                              }}
+                                              className="px-2 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 text-[10px] font-bold rounded cursor-pointer transition-colors flex items-center space-x-1"
+                                            >
+                                              <Edit2 className="w-3 h-3" />
+                                              <span className="hidden sm:inline">수정</span>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleDeleteBrochure(b.id)}
+                                              className="px-2 py-1 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 text-[10px] font-bold rounded cursor-pointer transition-colors"
+                                            >
+                                              삭제
+                                            </button>
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
                                   ))
                                 )}
@@ -6844,11 +6929,10 @@ export default function App() {
                                   setBulkType("brochure");
                                   setBulkInputText("");
                                 }}
-                                className={`px-4 py-2 text-xs font-black border-b-2 transition-all flex items-center space-x-1.5 ${
-                                  bulkType === "brochure"
+                                className={`px-4 py-2 text-xs font-black border-b-2 transition-all flex items-center space-x-1.5 ${bulkType === "brochure"
                                     ? "border-[#0B3B24] text-[#0B3B24]"
                                     : "border-transparent text-slate-400 hover:text-slate-600"
-                                }`}
+                                  }`}
                               >
                                 <span className="w-2 h-2 rounded-full bg-[#C5A059]"></span>
                                 <span>브로슈어 일괄 등록</span>
@@ -6859,11 +6943,10 @@ export default function App() {
                                   setBulkType("video");
                                   setBulkInputText("");
                                 }}
-                                className={`px-4 py-2 text-xs font-black border-b-2 transition-all flex items-center space-x-1.5 ${
-                                  bulkType === "video"
+                                className={`px-4 py-2 text-xs font-black border-b-2 transition-all flex items-center space-x-1.5 ${bulkType === "video"
                                     ? "border-[#0B3B24] text-[#0B3B24]"
                                     : "border-transparent text-slate-400 hover:text-slate-600"
-                                }`}
+                                  }`}
                               >
                                 <span className="w-2 h-2 rounded-full bg-rose-500"></span>
                                 <span>홍보 동영상 일괄 등록</span>
@@ -7209,7 +7292,7 @@ export default function App() {
                     >
                       {/* Roster & Filters panel */}
                       <div className="bg-white border border-[#E5E7EB] rounded-xl shadow-md" id="admin_roster_panel">
-                        
+
                         {/* Header search / filters block */}
                         <div className="p-6 border-b border-[#E5E7EB] space-y-4">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -7234,33 +7317,30 @@ export default function App() {
                                 <button
                                   type="button"
                                   onClick={() => setAdminClassificationGroup("status")}
-                                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                                    adminClassificationGroup === "status"
+                                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${adminClassificationGroup === "status"
                                       ? "bg-[#0B3B24] text-white shadow-xs"
                                       : "text-slate-600 hover:text-slate-900"
-                                  }`}
+                                    }`}
                                 >
                                   상담 상태별
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => setAdminClassificationGroup("franchise")}
-                                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                                    adminClassificationGroup === "franchise"
+                                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${adminClassificationGroup === "franchise"
                                       ? "bg-[#0B3B24] text-white shadow-xs"
                                       : "text-slate-600 hover:text-slate-900"
-                                  }`}
+                                    }`}
                                 >
                                   가맹 유형별
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => setAdminClassificationGroup("competency")}
-                                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                                    adminClassificationGroup === "competency"
+                                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${adminClassificationGroup === "competency"
                                       ? "bg-[#0B3B24] text-white shadow-xs"
                                       : "text-slate-600 hover:text-slate-900"
-                                  }`}
+                                    }`}
                                 >
                                   역량 등급별
                                 </button>
@@ -7277,11 +7357,10 @@ export default function App() {
                                   setAdminFilterLead("All");
                                   setAdminFilterStatus("All");
                                 }}
-                                className={`px-3 py-2 rounded-lg font-bold transition-all text-xs cursor-pointer border flex items-center space-x-1.5 ${
-                                  adminFilterFranchise === "All" && adminFilterCompetency === "All" && adminFilterLead === "All" && adminFilterStatus === "All"
+                                className={`px-3 py-2 rounded-lg font-bold transition-all text-xs cursor-pointer border flex items-center space-x-1.5 ${adminFilterFranchise === "All" && adminFilterCompetency === "All" && adminFilterLead === "All" && adminFilterStatus === "All"
                                     ? "bg-[#0B3B24] text-white border-transparent shadow-sm"
                                     : "bg-white text-slate-700 border-slate-250 hover:bg-slate-100"
-                                }`}
+                                  }`}
                               >
                                 <span>전체 보기</span>
                                 <span className="bg-black/10 px-1.5 py-0.5 rounded text-[10px] font-black">
@@ -7313,11 +7392,10 @@ export default function App() {
                                           setAdminFilterLead("All");
                                           setAdminFilterStatus(cat.status);
                                         }}
-                                        className={`px-3 py-2 rounded-lg font-bold transition-all text-xs cursor-pointer border flex items-center space-x-1.5 ${
-                                          isActive
+                                        className={`px-3 py-2 rounded-lg font-bold transition-all text-xs cursor-pointer border flex items-center space-x-1.5 ${isActive
                                             ? "bg-[#C5A059] text-white border-transparent shadow-sm"
                                             : "bg-white text-slate-700 border-slate-250 hover:bg-slate-100"
-                                        }`}
+                                          }`}
                                       >
                                         <span>{cat.label}</span>
                                         <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
@@ -7347,11 +7425,10 @@ export default function App() {
                                           setAdminFilterLead("All");
                                           setAdminFilterStatus("All");
                                         }}
-                                        className={`px-3 py-2 rounded-lg font-bold transition-all text-xs cursor-pointer border flex items-center space-x-1.5 ${
-                                          isActive
+                                        className={`px-3 py-2 rounded-lg font-bold transition-all text-xs cursor-pointer border flex items-center space-x-1.5 ${isActive
                                             ? "bg-[#C5A059] text-white border-transparent shadow-sm"
                                             : "bg-white text-slate-700 border-slate-250 hover:bg-slate-100"
-                                        }`}
+                                          }`}
                                       >
                                         <span>{cat.label}</span>
                                         <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
@@ -7384,11 +7461,10 @@ export default function App() {
                                           setAdminFilterLead("All");
                                           setAdminFilterStatus("All");
                                         }}
-                                        className={`px-3 py-2 rounded-lg font-bold transition-all text-xs cursor-pointer border flex items-center space-x-1.5 ${
-                                          isActive
+                                        className={`px-3 py-2 rounded-lg font-bold transition-all text-xs cursor-pointer border flex items-center space-x-1.5 ${isActive
                                             ? "bg-[#C5A059] text-white border-transparent shadow-sm"
                                             : "bg-white text-slate-700 border-slate-250 hover:bg-slate-100"
-                                        }`}
+                                          }`}
                                       >
                                         <span>{cat.label}</span>
                                         <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
@@ -7403,293 +7479,292 @@ export default function App() {
                           </div>
 
                           <div className="grid grid-cols-1 sm:grid-cols-12 gap-3" id="admin_filters_group">
-                        
-                        {/* Search Input */}
-                        <div className="sm:col-span-4 relative">
-                          <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                          <input
-                            type="text"
-                            placeholder="원장명, 지역, 연락처, 담당관 검색..."
-                            value={adminSearch}
-                            onChange={(e) => setAdminSearch(e.target.value)}
-                            className="w-full bg-white border border-slate-300 rounded pl-9 pr-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#C5A059]"
-                          />
-                        </div>
 
-                        {/* Franchise filter */}
-                        <div className="sm:col-span-2">
-                          <select
-                            value={adminFilterFranchise}
-                            onChange={(e) => setAdminFilterFranchise(e.target.value)}
-                            className="w-full bg-white border border-slate-300 rounded px-2.5 py-2 text-xs text-slate-700 focus:outline-none focus:border-[#C5A059]"
-                            aria-label="가맹유형 필터"
-                          >
-                            <option value="All">가맹형태: 전체</option>
-                            <option value="신규 창업">신규 창업</option>
-                            <option value="브랜드 전환">브랜드 전환</option>
-                          </select>
-                        </div>
-
-                        {/* Competency filter */}
-                        <div className="sm:col-span-2">
-                          <select
-                            value={adminFilterCompetency}
-                            onChange={(e) => setAdminFilterCompetency(e.target.value)}
-                            className="w-full bg-white border border-slate-300 rounded px-2.5 py-2 text-xs text-slate-700 focus:outline-none focus:border-[#C5A059]"
-                            aria-label="역량등급 필터"
-                          >
-                            <option value="All">역량등급: 전체</option>
-                            <option value="S">S등급</option>
-                            <option value="A">A등급</option>
-                            <option value="B">B등급</option>
-                            <option value="C">C등급</option>
-                            <option value="D">D등급</option>
-                          </select>
-                        </div>
-
-                        {/* Lead filter */}
-                        <div className="sm:col-span-2">
-                          <select
-                            value={adminFilterLead}
-                            onChange={(e) => setAdminFilterLead(e.target.value)}
-                            className="w-full bg-white border border-slate-300 rounded px-2.5 py-2 text-xs text-slate-700 focus:outline-none focus:border-[#C5A059]"
-                            aria-label="리드등급 필터"
-                          >
-                            <option value="All">리드등급: 전체</option>
-                            <option value="S">S급 리드</option>
-                            <option value="A">A급 리드</option>
-                            <option value="B">B급 리드</option>
-                            <option value="C">C급 리드</option>
-                          </select>
-                        </div>
-
-                        {/* Counseling Status filter */}
-                        <div className="sm:col-span-2">
-                          <select
-                            value={adminFilterStatus}
-                            onChange={(e) => setAdminFilterStatus(e.target.value)}
-                            className="w-full bg-white border border-slate-300 rounded px-2.5 py-2 text-xs text-slate-700 focus:outline-none focus:border-[#C5A059]"
-                            aria-label="상담방식 필터"
-                          >
-                            <option value="All">상담상태: 전체</option>
-                            <option value="신규접수">신규접수</option>
-                            <option value="1차상담">1차상담</option>
-                            <option value="상권분석">상권분석</option>
-                            <option value="설명회참석">설명회참석</option>
-                            <option value="계약진행">계약진행</option>
-                            <option value="계약완료">계약완료</option>
-                            <option value="보류">보류</option>
-                          </select>
-                        </div>
-
-                      </div>
-                    </div>
-
-                    {/* Batch Actions Toolbar */}
-                    {selectedApplicantIds.length > 0 && (
-                      <div className="bg-rose-50/80 border-b border-rose-100 px-6 py-3.5 flex items-center justify-between">
-                        <div className="flex items-center space-x-2 text-rose-800 text-xs font-extrabold">
-                          <CheckCircle2 className="w-4 h-4 text-rose-500 flex-shrink-0 animate-bounce" />
-                          <span>선택된 원장님: <strong className="text-sm font-black text-rose-600 underline decoration-2">{selectedApplicantIds.length}</strong>명</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleBatchDeleteApplicants}
-                          className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl shadow transition-all flex items-center space-x-1.5 cursor-pointer active:scale-95 animate-fade-in"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          <span>선택한 건 일괄삭제</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Table of Applicants */}
-                    <div className="overflow-x-auto rounded-xl border border-slate-200" id="applicants_table_scroll">
-                      <table className="w-full text-xs text-left border-collapse" id="admin_roster_table">
-                        <thead className="bg-[#0B3B24] text-slate-100 uppercase text-[10px] tracking-wider font-bold">
-                          <tr>
-                            <th className="pl-4 pr-1 py-4 text-center w-12 bg-[#0B3B24]/95 select-none font-sans font-extrabold text-slate-200 whitespace-nowrap">
+                            {/* Search Input */}
+                            <div className="sm:col-span-4 relative">
+                              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                               <input
-                                type="checkbox"
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedApplicantIds(filteredApplicants.map(app => app.id));
-                                  } else {
-                                    setSelectedApplicantIds([]);
-                                  }
-                                }}
-                                checked={filteredApplicants.length > 0 && selectedApplicantIds.length === filteredApplicants.length}
-                                className="h-4 w-4 rounded border-slate-350 text-[#C5A059] focus:ring-[#C5A059] cursor-pointer"
-                                aria-label="전체 선택"
+                                type="text"
+                                placeholder="원장명, 지역, 연락처, 담당관 검색..."
+                                value={adminSearch}
+                                onChange={(e) => setAdminSearch(e.target.value)}
+                                className="w-full bg-white border border-slate-300 rounded pl-9 pr-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#C5A059]"
                               />
-                            </th>
-                            <th className="px-4 py-4 text-left font-sans font-extrabold text-slate-200 bg-[#0B3B24]/95 whitespace-nowrap">이름</th>
-                            <th className="px-4 py-4 text-left font-sans font-extrabold text-slate-200 bg-[#0B3B24]/95 whitespace-nowrap">가맹유형</th>
-                            <th className="px-4 py-4 text-left font-sans font-extrabold text-slate-200 bg-[#0B3B24]/95 whitespace-nowrap">역량등급</th>
-                            <th className="px-4 py-4 text-center font-sans font-extrabold text-slate-200 bg-[#0B3B24]/95 whitespace-nowrap min-w-[120px]">결과요청여부</th>
-                            <th className="px-4 py-4 text-center font-sans font-extrabold text-slate-200 bg-[#0B3B24]/95 w-36 whitespace-nowrap">진단결과보기</th>
-                            <th className="px-4 py-4 text-center font-sans font-extrabold text-slate-200 bg-[#0B3B24]/95 w-24 whitespace-nowrap">삭제여부</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#E5E7EB] bg-white text-slate-700">
-                          {filteredApplicants.length > 0 ? (
-                            filteredApplicants.map((app) => (
-                              <tr key={app.id} className={`hover:bg-[#0B3B24]/5 border-b border-[#E5E7EB] transition-all duration-150 ${selectedApplicantIds.includes(app.id) ? "bg-[#0B3B24]/5/20" : ""}`}>
-                                
-                                {/* Row Checkbox */}
-                                <td className="pl-4 pr-1 py-4.5 text-center align-middle w-12">
+                            </div>
+
+                            {/* Franchise filter */}
+                            <div className="sm:col-span-2">
+                              <select
+                                value={adminFilterFranchise}
+                                onChange={(e) => setAdminFilterFranchise(e.target.value)}
+                                className="w-full bg-white border border-slate-300 rounded px-2.5 py-2 text-xs text-slate-700 focus:outline-none focus:border-[#C5A059]"
+                                aria-label="가맹유형 필터"
+                              >
+                                <option value="All">가맹형태: 전체</option>
+                                <option value="신규 창업">신규 창업</option>
+                                <option value="브랜드 전환">브랜드 전환</option>
+                              </select>
+                            </div>
+
+                            {/* Competency filter */}
+                            <div className="sm:col-span-2">
+                              <select
+                                value={adminFilterCompetency}
+                                onChange={(e) => setAdminFilterCompetency(e.target.value)}
+                                className="w-full bg-white border border-slate-300 rounded px-2.5 py-2 text-xs text-slate-700 focus:outline-none focus:border-[#C5A059]"
+                                aria-label="역량등급 필터"
+                              >
+                                <option value="All">역량등급: 전체</option>
+                                <option value="S">S등급</option>
+                                <option value="A">A등급</option>
+                                <option value="B">B등급</option>
+                                <option value="C">C등급</option>
+                                <option value="D">D등급</option>
+                              </select>
+                            </div>
+
+                            {/* Lead filter */}
+                            <div className="sm:col-span-2">
+                              <select
+                                value={adminFilterLead}
+                                onChange={(e) => setAdminFilterLead(e.target.value)}
+                                className="w-full bg-white border border-slate-300 rounded px-2.5 py-2 text-xs text-slate-700 focus:outline-none focus:border-[#C5A059]"
+                                aria-label="리드등급 필터"
+                              >
+                                <option value="All">리드등급: 전체</option>
+                                <option value="S">S급 리드</option>
+                                <option value="A">A급 리드</option>
+                                <option value="B">B급 리드</option>
+                                <option value="C">C급 리드</option>
+                              </select>
+                            </div>
+
+                            {/* Counseling Status filter */}
+                            <div className="sm:col-span-2">
+                              <select
+                                value={adminFilterStatus}
+                                onChange={(e) => setAdminFilterStatus(e.target.value)}
+                                className="w-full bg-white border border-slate-300 rounded px-2.5 py-2 text-xs text-slate-700 focus:outline-none focus:border-[#C5A059]"
+                                aria-label="상담방식 필터"
+                              >
+                                <option value="All">상담상태: 전체</option>
+                                <option value="신규접수">신규접수</option>
+                                <option value="1차상담">1차상담</option>
+                                <option value="상권분석">상권분석</option>
+                                <option value="설명회참석">설명회참석</option>
+                                <option value="계약진행">계약진행</option>
+                                <option value="계약완료">계약완료</option>
+                                <option value="보류">보류</option>
+                              </select>
+                            </div>
+
+                          </div>
+                        </div>
+
+                        {/* Batch Actions Toolbar */}
+                        {selectedApplicantIds.length > 0 && (
+                          <div className="bg-rose-50/80 border-b border-rose-100 px-6 py-3.5 flex items-center justify-between">
+                            <div className="flex items-center space-x-2 text-rose-800 text-xs font-extrabold">
+                              <CheckCircle2 className="w-4 h-4 text-rose-500 flex-shrink-0 animate-bounce" />
+                              <span>선택된 원장님: <strong className="text-sm font-black text-rose-600 underline decoration-2">{selectedApplicantIds.length}</strong>명</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleBatchDeleteApplicants}
+                              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl shadow transition-all flex items-center space-x-1.5 cursor-pointer active:scale-95 animate-fade-in"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              <span>선택한 건 일괄삭제</span>
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Table of Applicants */}
+                        <div className="overflow-x-auto rounded-xl border border-slate-200" id="applicants_table_scroll">
+                          <table className="w-full text-xs text-left border-collapse" id="admin_roster_table">
+                            <thead className="bg-[#0B3B24] text-slate-100 uppercase text-[10px] tracking-wider font-bold">
+                              <tr>
+                                <th className="pl-4 pr-1 py-4 text-center w-12 bg-[#0B3B24]/95 select-none font-sans font-extrabold text-slate-200 whitespace-nowrap">
                                   <input
                                     type="checkbox"
                                     onChange={(e) => {
                                       if (e.target.checked) {
-                                        setSelectedApplicantIds(prev => [...prev, app.id]);
+                                        setSelectedApplicantIds(filteredApplicants.map(app => app.id));
                                       } else {
-                                        setSelectedApplicantIds(prev => prev.filter(id => id !== app.id));
+                                        setSelectedApplicantIds([]);
                                       }
                                     }}
-                                    checked={selectedApplicantIds.includes(app.id)}
-                                    className="h-4 w-4 rounded border-slate-300 text-[#C5A059] focus:ring-[#C5A059] cursor-pointer"
-                                    aria-label={`${app.name} 원장님 선택`}
+                                    checked={filteredApplicants.length > 0 && selectedApplicantIds.length === filteredApplicants.length}
+                                    className="h-4 w-4 rounded border-slate-350 text-[#C5A059] focus:ring-[#C5A059] cursor-pointer"
+                                    aria-label="전체 선택"
                                   />
-                                </td>
-
-                                {/* 이름 (원장명 & 신청일시) */}
-                                <td className="px-4 py-4.5 align-middle">
-                                  <div className="flex flex-col space-y-1">
-                                    <div className="font-extrabold text-[#0B3B24] text-sm sm:text-[15px] flex flex-row items-center gap-1.5 flex-nowrap whitespace-nowrap">
-                                      <span className="tracking-tight hover:text-[#C5A059] transition-colors whitespace-nowrap shrink-0">{app.name}</span>
-                                      {app.birth && (() => {
-                                        const age = calculateKoreanAge(app.birth);
-                                        return age !== null ? (
-                                          <span className="text-[10px] font-black text-[#C5A059] bg-[#C5A059]/10 border border-[#C5A059]/20 px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap inline-flex items-center">
-                                            만 {age}세
-                                          </span>
-                                        ) : null;
-                                      })()}
-                                    </div>
-                                    <span className="text-[10px] text-slate-400 font-mono font-semibold tracking-tight block whitespace-nowrap">
-                                      신청: {formatAppliedAt(app.appliedAt)}
-                                    </span>
-                                    {app.mainConcern && (
-                                      <div className="text-[10px] text-[#C5A059] font-semibold bg-[#C5A059]/5 border border-[#C5A059]/10 rounded px-1.5 py-0.5 mt-1 max-w-[180px] truncate" title={app.mainConcern}>
-                                        고민: {app.mainConcern}
-                                      </div>
-                                    )}
-                                  </div>
-                                </td>
-
-                                {/* 가맹유형 */}
-                                <td className="px-4 py-4.5 align-middle">
-                                  <div className="flex flex-col space-y-1">
-                                    <span className={`inline-flex items-center self-start px-3 py-1 rounded-full text-[10px] font-black border uppercase tracking-wider whitespace-nowrap ${
-                                      app.franchiseType === "신규 창업" 
-                                        ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                                        : "bg-amber-50 text-amber-700 border-amber-250"
-                                    }`}>
-                                      {app.franchiseType}
-                                    </span>
-                                    {app.openingMonth && app.openingMonth !== "없음" && (
-                                      <div className="text-[10px] text-[#C5A059] font-bold flex items-center gap-1.5 pl-0.5 mt-0.5 whitespace-nowrap">
-                                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#C5A059] animate-pulse" />
-                                        <span>{app.openingMonth} 예정</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                </td>
-
-                                {/* 역량등급 */}
-                                <td className="px-4 py-4.5 align-middle font-sans">
-                                  <div className="flex flex-col space-y-1.5">
-                                    <div className="flex items-center space-x-1.5 flex-nowrap whitespace-nowrap">
-                                      {(() => {
-                                        const grade = app.competencyRank || "C";
-                                        const colors: Record<string, string> = {
-                                          S: "bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/30",
-                                          S등급: "bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/30",
-                                          A: "bg-emerald-50 text-emerald-700 border-emerald-250",
-                                          B: "bg-blue-50 text-[#C5A059] border-[#C5A059]/30",
-                                          C: "bg-orange-50 text-orange-700 border-orange-200",
-                                          D: "bg-red-50 text-red-700 border-red-200"
-                                        };
-                                        const badgeStyle = colors[grade] || colors.C;
-                                        return (
-                                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider border whitespace-nowrap ${badgeStyle}`}>
-                                            {grade}등급
-                                          </span>
-                                        );
-                                      })()}
-                                      <span className="font-mono text-[10px] font-black text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
-                                        {app.totalScore}점
-                                      </span>
-                                    </div>
-                                    <span className="text-[10px] text-slate-400 font-medium tracking-tight block truncate max-w-[200px]" title={getCompetencyLabelAndDesc(app.competencyRank, app.franchiseType)}>
-                                      {getCompetencyLabelAndDesc(app.competencyRank, app.franchiseType).split(":")[0]}
-                                    </span>
-                                  </div>
-                                </td>
-
-                                {/* 결과요청여부 */}
-                                <td className="px-4 py-4.5 align-middle text-center">
-                                  {app.consultantInquiryRequested ? (
-                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-50 text-rose-600 border border-rose-250 rounded-full text-[10px] font-black shadow-sm tracking-wider whitespace-nowrap animate-pulse">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />
-                                      <span>분석 요청됨 🔔</span>
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 text-slate-500 border border-slate-200 rounded-full text-[10px] font-bold tracking-wider whitespace-nowrap">
-                                      <span>일반 조회 📄</span>
-                                    </span>
-                                  )}
-                                </td>
-
-                                {/* 진단결과보기 */}
-                                <td className="px-4 py-4.5 align-middle text-center">
-                                  <button
-                                    onClick={() => {
-                                      setDiagnosisResult(app);
-                                      setView("result");
-                                    }}
-                                    className="inline-flex items-center justify-center gap-1.5 w-full max-w-[120px] py-1.5 rounded-full bg-[#0B3B24] hover:bg-[#062919] text-white border-transparent text-[11px] font-black transition-all cursor-pointer shadow-md active:scale-95 whitespace-nowrap hover:shadow-lg"
-                                  >
-                                    <Eye className="w-3.5 h-3.5 text-[#C5A059]" />
-                                    <span>진단결과보기</span>
-                                  </button>
-                                </td>
-
-                                {/* 삭제여부 */}
-                                <td className="px-4 py-4.5 align-middle text-center">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteApplicant(app.id, app.name)}
-                                    className="inline-flex items-center justify-center gap-1 w-16 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 rounded-full transition-all duration-150 border border-rose-150 cursor-pointer hover:shadow-inner active:scale-95 text-[10px] font-bold"
-                                    title={`${app.name} 원장님 데이터 삭제`}
-                                  >
-                                    <Trash2 className="w-3 h-3 shrink-0" />
-                                    <span>삭제</span>
-                                  </button>
-                                </td>
-
+                                </th>
+                                <th className="px-4 py-4 text-left font-sans font-extrabold text-slate-200 bg-[#0B3B24]/95 whitespace-nowrap">이름</th>
+                                <th className="px-4 py-4 text-left font-sans font-extrabold text-slate-200 bg-[#0B3B24]/95 whitespace-nowrap">가맹유형</th>
+                                <th className="px-4 py-4 text-left font-sans font-extrabold text-slate-200 bg-[#0B3B24]/95 whitespace-nowrap">역량등급</th>
+                                <th className="px-4 py-4 text-center font-sans font-extrabold text-slate-200 bg-[#0B3B24]/95 whitespace-nowrap min-w-[120px]">결과요청여부</th>
+                                <th className="px-4 py-4 text-center font-sans font-extrabold text-slate-200 bg-[#0B3B24]/95 w-36 whitespace-nowrap">진단결과보기</th>
+                                <th className="px-4 py-4 text-center font-sans font-extrabold text-slate-200 bg-[#0B3B24]/95 w-24 whitespace-nowrap">삭제여부</th>
                               </tr>
-                            ))
-                          ) : (
-                            <tr>
-                              <td colSpan={7} className="text-center py-16 text-slate-500">
-                                <AlertCircle className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                                <p className="text-sm font-semibold">조건에 일치하는 창업 신청자 데이터가 없습니다.</p>
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                            </thead>
+                            <tbody className="divide-y divide-[#E5E7EB] bg-white text-slate-700">
+                              {filteredApplicants.length > 0 ? (
+                                filteredApplicants.map((app) => (
+                                  <tr key={app.id} className={`hover:bg-[#0B3B24]/5 border-b border-[#E5E7EB] transition-all duration-150 ${selectedApplicantIds.includes(app.id) ? "bg-[#0B3B24]/5/20" : ""}`}>
 
-                    {/* Table statistics metadata summary footer */}
-                    <div className="p-4 bg-slate-50 border-t border-[#E5E7EB] flex items-center justify-between text-[11px] text-slate-500 font-medium font-sans">
-                      <span>검색결과: 총 <strong className="text-[#0B3B24]">{filteredApplicants.length}</strong>건이 표시 중입니다.</span>
-                      <span>고려대학교 협력 파트너스 오프닝맵 데이터 시스템 v1.0</span>
-                    </div>
+                                    {/* Row Checkbox */}
+                                    <td className="pl-4 pr-1 py-4.5 text-center align-middle w-12">
+                                      <input
+                                        type="checkbox"
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setSelectedApplicantIds(prev => [...prev, app.id]);
+                                          } else {
+                                            setSelectedApplicantIds(prev => prev.filter(id => id !== app.id));
+                                          }
+                                        }}
+                                        checked={selectedApplicantIds.includes(app.id)}
+                                        className="h-4 w-4 rounded border-slate-300 text-[#C5A059] focus:ring-[#C5A059] cursor-pointer"
+                                        aria-label={`${app.name} 원장님 선택`}
+                                      />
+                                    </td>
 
-                  </div>
+                                    {/* 이름 (원장명 & 신청일시) */}
+                                    <td className="px-4 py-4.5 align-middle">
+                                      <div className="flex flex-col space-y-1">
+                                        <div className="font-extrabold text-[#0B3B24] text-sm sm:text-[15px] flex flex-row items-center gap-1.5 flex-nowrap whitespace-nowrap">
+                                          <span className="tracking-tight hover:text-[#C5A059] transition-colors whitespace-nowrap shrink-0">{app.name}</span>
+                                          {app.birth && (() => {
+                                            const age = calculateKoreanAge(app.birth);
+                                            return age !== null ? (
+                                              <span className="text-[10px] font-black text-[#C5A059] bg-[#C5A059]/10 border border-[#C5A059]/20 px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap inline-flex items-center">
+                                                만 {age}세
+                                              </span>
+                                            ) : null;
+                                          })()}
+                                        </div>
+                                        <span className="text-[10px] text-slate-400 font-mono font-semibold tracking-tight block whitespace-nowrap">
+                                          신청: {formatAppliedAt(app.appliedAt)}
+                                        </span>
+                                        {app.mainConcern && (
+                                          <div className="text-[10px] text-[#C5A059] font-semibold bg-[#C5A059]/5 border border-[#C5A059]/10 rounded px-1.5 py-0.5 mt-1 max-w-[180px] truncate" title={app.mainConcern}>
+                                            고민: {app.mainConcern}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </td>
+
+                                    {/* 가맹유형 */}
+                                    <td className="px-4 py-4.5 align-middle">
+                                      <div className="flex flex-col space-y-1">
+                                        <span className={`inline-flex items-center self-start px-3 py-1 rounded-full text-[10px] font-black border uppercase tracking-wider whitespace-nowrap ${app.franchiseType === "신규 창업"
+                                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                            : "bg-amber-50 text-amber-700 border-amber-250"
+                                          }`}>
+                                          {app.franchiseType}
+                                        </span>
+                                        {app.openingMonth && app.openingMonth !== "없음" && (
+                                          <div className="text-[10px] text-[#C5A059] font-bold flex items-center gap-1.5 pl-0.5 mt-0.5 whitespace-nowrap">
+                                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#C5A059] animate-pulse" />
+                                            <span>{app.openingMonth} 예정</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </td>
+
+                                    {/* 역량등급 */}
+                                    <td className="px-4 py-4.5 align-middle font-sans">
+                                      <div className="flex flex-col space-y-1.5">
+                                        <div className="flex items-center space-x-1.5 flex-nowrap whitespace-nowrap">
+                                          {(() => {
+                                            const grade = app.competencyRank || "C";
+                                            const colors: Record<string, string> = {
+                                              S: "bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/30",
+                                              S등급: "bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/30",
+                                              A: "bg-emerald-50 text-emerald-700 border-emerald-250",
+                                              B: "bg-blue-50 text-[#C5A059] border-[#C5A059]/30",
+                                              C: "bg-orange-50 text-orange-700 border-orange-200",
+                                              D: "bg-red-50 text-red-700 border-red-200"
+                                            };
+                                            const badgeStyle = colors[grade] || colors.C;
+                                            return (
+                                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider border whitespace-nowrap ${badgeStyle}`}>
+                                                {grade}등급
+                                              </span>
+                                            );
+                                          })()}
+                                          <span className="font-mono text-[10px] font-black text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
+                                            {app.totalScore}점
+                                          </span>
+                                        </div>
+                                        <span className="text-[10px] text-slate-400 font-medium tracking-tight block truncate max-w-[200px]" title={getCompetencyLabelAndDesc(app.competencyRank, app.franchiseType)}>
+                                          {getCompetencyLabelAndDesc(app.competencyRank, app.franchiseType).split(":")[0]}
+                                        </span>
+                                      </div>
+                                    </td>
+
+                                    {/* 결과요청여부 */}
+                                    <td className="px-4 py-4.5 align-middle text-center">
+                                      {app.consultantInquiryRequested ? (
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-50 text-rose-600 border border-rose-250 rounded-full text-[10px] font-black shadow-sm tracking-wider whitespace-nowrap animate-pulse">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />
+                                          <span>분석 요청됨 🔔</span>
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 text-slate-500 border border-slate-200 rounded-full text-[10px] font-bold tracking-wider whitespace-nowrap">
+                                          <span>일반 조회 📄</span>
+                                        </span>
+                                      )}
+                                    </td>
+
+                                    {/* 진단결과보기 */}
+                                    <td className="px-4 py-4.5 align-middle text-center">
+                                      <button
+                                        onClick={() => {
+                                          setDiagnosisResult(app);
+                                          setView("result");
+                                        }}
+                                        className="inline-flex items-center justify-center gap-1.5 w-full max-w-[120px] py-1.5 rounded-full bg-[#0B3B24] hover:bg-[#062919] text-white border-transparent text-[11px] font-black transition-all cursor-pointer shadow-md active:scale-95 whitespace-nowrap hover:shadow-lg"
+                                      >
+                                        <Eye className="w-3.5 h-3.5 text-[#C5A059]" />
+                                        <span>진단결과보기</span>
+                                      </button>
+                                    </td>
+
+                                    {/* 삭제여부 */}
+                                    <td className="px-4 py-4.5 align-middle text-center">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteApplicant(app.id, app.name)}
+                                        className="inline-flex items-center justify-center gap-1 w-16 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 rounded-full transition-all duration-150 border border-rose-150 cursor-pointer hover:shadow-inner active:scale-95 text-[10px] font-bold"
+                                        title={`${app.name} 원장님 데이터 삭제`}
+                                      >
+                                        <Trash2 className="w-3 h-3 shrink-0" />
+                                        <span>삭제</span>
+                                      </button>
+                                    </td>
+
+                                  </tr>
+                                ))
+                              ) : (
+                                <tr>
+                                  <td colSpan={7} className="text-center py-16 text-slate-500">
+                                    <AlertCircle className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                                    <p className="text-sm font-semibold">조건에 일치하는 창업 신청자 데이터가 없습니다.</p>
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Table statistics metadata summary footer */}
+                        <div className="p-4 bg-slate-50 border-t border-[#E5E7EB] flex items-center justify-between text-[11px] text-slate-500 font-medium font-sans">
+                          <span>검색결과: 총 <strong className="text-[#0B3B24]">{filteredApplicants.length}</strong>건이 표시 중입니다.</span>
+                          <span>고려대학교 협력 파트너스 오프닝맵 데이터 시스템 v1.0</span>
+                        </div>
+
+                      </div>
                     </motion.div>
                   )}
                 </div>
@@ -7800,8 +7875,8 @@ export default function App() {
 
       {/* Hidden Printable Report - Only rendered when diagnosisResult exists and only visible via print query */}
       {diagnosisResult && (
-        <div 
-          className={`${isGeneratingPdf ? "block fixed top-0 left-[-9999px] w-[850px] bg-white z-[-50] overflow-visible" : "hidden print:block"} print-optimized-report bg-white text-slate-800 border-0 p-0 m-0`} 
+        <div
+          className={`${isGeneratingPdf ? "block fixed top-0 left-[-9999px] w-[850px] bg-white z-[-50] overflow-visible" : "hidden print:block"} print-optimized-report bg-white text-slate-800 border-0 p-0 m-0`}
           id="printable_report_wrapper"
           style={{ fontFamily: "'Inter', sans-serif" }}
         >
@@ -7900,7 +7975,7 @@ export default function App() {
                 {/* [중간 1부] 다차원 역량 분석 육각형 결과 */}
                 <div className="mb-6">
                   <h3 className="text-sm font-extrabold text-[#0B3B24] border-b pb-1 mb-3">2. 다차원 역량 분석 육각형 진단 지표 (Competency Hexagon Charts)</h3>
-                  
+
                   <div className="grid grid-cols-12 gap-4 border border-slate-200 p-4 bg-slate-50/40 rounded-lg print-avoid-break">
                     {/* Printable Radar Chart */}
                     <div className="col-span-5 h-[180px] flex items-center justify-center">
@@ -7915,13 +7990,13 @@ export default function App() {
                           }))
                         }>
                           <PolarGrid stroke="#CBD5E1" />
-                          <PolarAngleAxis 
-                            dataKey="subject" 
+                          <PolarAngleAxis
+                            dataKey="subject"
                             tick={{ fill: '#334155', fontSize: 7, fontWeight: 820 }}
                           />
-                          <PolarRadiusAxis 
-                            angle={30} 
-                            domain={[0, 5]} 
+                          <PolarRadiusAxis
+                            angle={30}
+                            domain={[0, 5]}
                             tick={{ fill: '#94A3B8', fontSize: 7 }}
                             tickCount={6}
                           />
@@ -7964,7 +8039,7 @@ export default function App() {
                 {diagnosisResultAnalysis && (
                   <div className="mb-6 space-y-4">
                     <h3 className="text-sm font-extrabold text-[#0B3B24] border-b pb-1 mb-2">3. 고려대 파트너 연계 추천 상권 및 가이드라인 (Opening Map Solutions)</h3>
-                    
+
                     <div className="grid grid-cols-2 gap-4">
                       <div className="border border-slate-300 rounded-lg p-3.5 bg-slate-50/50 print-avoid-break">
                         <h5 className="text-[11px] font-extrabold text-[#0B3B24] border-b pb-1 mb-2">✓ 추천 학원 상권 입지 구역</h5>
@@ -8022,7 +8097,7 @@ export default function App() {
                 <p className="text-xs text-slate-650 leading-relaxed max-w-lg mx-auto font-medium">
                   본 서류 심사가 완결됨에 따라 본사 매칭 전임 담당관(<b>{diagnosisResult.counselorName}</b>)이 원장님 연락처로 직접 신속히 전화를 드리고 상세 개설 심사 통보 유선 상담 및 입지 로드맵 브리핑을 지원해 드립니다.
                 </p>
-                
+
                 {/* Official Stamp Box for high fidelity */}
                 <div className="pt-6 flex justify-center items-center gap-12 select-none">
                   <div className="text-left font-sans">
@@ -8060,7 +8135,7 @@ export default function App() {
               {/* [중간 3부] 보완사항 (Detail questions loop) */}
               <div className="mb-6 space-y-3.5">
                 <h3 className="text-sm font-extrabold text-[#0B3B24] border-b pb-1 mb-2">4. 자가진단 문항별 세부 보완 및 처방 솔루션 (Prescription Details)</h3>
-                
+
                 <div className="space-y-3">
                   {(diagnosisResult.franchiseType === "신규 창업" ? newQuestions : brandQuestions).map((q, idx) => {
                     const score = diagnosisResult.answers[idx] || 3;
@@ -8075,18 +8150,18 @@ export default function App() {
                           </span>
                           <div className="w-full text-[10.5px]">
                             <h4 className="font-extrabold text-slate-800 leading-tight">{q.text}</h4>
-                            
+
                             <div className="grid grid-cols-12 gap-2 mt-1.5 pt-1.5 border-t border-slate-200/50 text-[10px]">
                               <div className="col-span-4 bg-slate-50 px-2 py-1 rounded">
                                 <span className="text-[8px] text-slate-400 block font-bold">나의 답변</span>
                                 <span className="text-slate-700 font-bold block truncate">{selectedOptionText}</span>
                               </div>
-                              
+
                               <div className="col-span-2 bg-slate-50 px-2 py-1 rounded text-center">
                                 <span className="text-[8px] text-slate-400 block font-bold">평가수준</span>
                                 <span className="text-[#C5A059] font-black block">{feedback.scoreText} ({score}점)</span>
                               </div>
-                              
+
                               <div className="col-span-6 bg-slate-50 px-2 py-1 rounded">
                                 <span className="text-[8px] text-[#C5A059] font-extrabold block">본사 개원 보완 권고사항</span>
                                 <p className="text-slate-600 font-semibold leading-normal mt-0.5 text-[9.5px]">
@@ -8147,11 +8222,10 @@ export default function App() {
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm font-sans">
           <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
             {/* Header portion with deep colors */}
-            <div className={`px-5 py-4 flex items-center space-x-3 text-white ${
-              uploadModalResult.success 
-                ? 'bg-gradient-to-r from-emerald-600 to-teal-700' 
+            <div className={`px-5 py-4 flex items-center space-x-3 text-white ${uploadModalResult.success
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-700'
                 : 'bg-gradient-to-r from-rose-600 to-red-700'
-            }`}>
+              }`}>
               {uploadModalResult.success ? (
                 <CheckCircle2 className="w-6 h-6 text-emerald-100 flex-shrink-0 animate-bounce" />
               ) : (
@@ -8185,11 +8259,10 @@ export default function App() {
                   type="button"
                   id="excel_modal_close_btn"
                   onClick={() => setUploadModalResult(null)}
-                  className={`w-full py-2.5 px-4 rounded-lg text-xs font-bold transition-all text-white shadow-sm hover:shadow active:scale-95 focus:outline-none focus:ring-2 ${
-                    uploadModalResult.success 
-                      ? 'bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500' 
+                  className={`w-full py-2.5 px-4 rounded-lg text-xs font-bold transition-all text-white shadow-sm hover:shadow active:scale-95 focus:outline-none focus:ring-2 ${uploadModalResult.success
+                      ? 'bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500'
                       : 'bg-rose-600 hover:bg-rose-700 focus:ring-rose-500'
-                  }`}
+                    }`}
                 >
                   확인 완료
                 </button>
@@ -8392,13 +8465,12 @@ export default function App() {
               initial={{ opacity: 0, y: 30, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -20, scale: 0.95, transition: { duration: 0.2 } }}
-              className={`p-4 rounded-xl shadow-xl border flex items-start space-x-3 pointer-events-auto text-xs font-extrabold leading-relaxed transition-all ${
-                toast.type === "success"
+              className={`p-4 rounded-xl shadow-xl border flex items-start space-x-3 pointer-events-auto text-xs font-extrabold leading-relaxed transition-all ${toast.type === "success"
                   ? "bg-[#0B3B24] border-[#C5A059]/40 text-white"
                   : toast.type === "error"
-                  ? "bg-rose-950 border-rose-500/40 text-white"
-                  : "bg-slate-900 border-slate-700/40 text-white"
-              }`}
+                    ? "bg-rose-950 border-rose-500/40 text-white"
+                    : "bg-slate-900 border-slate-700/40 text-white"
+                }`}
             >
               <span className="shrink-0 pt-0.5">
                 {toast.type === "success" ? (

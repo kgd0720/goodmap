@@ -24,6 +24,7 @@
     "pdfjs-dist": "^6.1.200",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
+    "react-pageflip": "^2.0.3",
     "recharts": "^3.8.1",
     "vite": "^6.2.3",
     "xlsx": "^0.18.5"
