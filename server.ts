@@ -39,7 +39,7 @@ const COMMENTS_FILE = path.join(process.cwd(), "comments_db.json");
 const BRAND_CONFIG_FILE = path.join(process.cwd(), "brand_config.json");
 
 // Serve uploaded brochure files
-const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+const UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }

@@ -28,7 +28,7 @@ export default defineConfig(() => {
           '**/consultants_db.json',
           '**/comments_db.json',
           '**/questions_db.json',
-          '**/uploads/**',
+          '**/public/uploads/**',
           '**/*.log',
         ],
       },
