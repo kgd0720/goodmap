@@ -2756,12 +2756,42 @@ export default function App() {
   const extractYoutubeId = (url: string): string => {
     if (!url) return "";
     const trimmed = url.trim();
+    
+    // 1. If it's already an 11-character ID
     if (trimmed.length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
       return trimmed;
     }
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/|live\/)([^#\&\?]*).*/;
-    const match = trimmed.match(regExp);
-    return match && match[2].length === 11 ? match[2] : "";
+    
+    // 2. Parse using standard URL if possible to extract 'v' parameter
+    try {
+      const urlObj = new URL(trimmed);
+      if (urlObj.hostname.includes("youtube.com")) {
+        const v = urlObj.searchParams.get("v");
+        if (v && v.length === 11) return v;
+      }
+    } catch (e) {
+      // ignore URL parsing error and fallback to regex
+    }
+
+    // 3. Regex patterns for different youtube URL styles
+    const patterns = [
+      /youtu\.be\/([a-zA-Z0-9_-]{11})/,
+      /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+      /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
+      /youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
+      /youtube\.com\/watch\?.*&v=([a-zA-Z0-9_-]{11})/,
+      /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+      /youtube\.com\/live\/([a-zA-Z0-9_-]{11})/
+    ];
+
+    for (const pattern of patterns) {
+      const match = trimmed.match(pattern);
+      if (match && match[1] && match[1].length === 11) {
+        return match[1];
+      }
+    }
+
+    return "";
   };
 
   // Handle adding a video

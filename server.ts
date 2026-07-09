@@ -15,8 +15,8 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-app.use(express.json({ limit: "200mb" }));
-app.use(express.urlencoded({ limit: "200mb", extended: true }));
+app.use(express.json({ limit: "500mb" }));
+app.use(express.urlencoded({ limit: "500mb", extended: true }));
 
 // Initialize Gemini API client
 let ai: GoogleGenAI | null = null;
@@ -988,12 +988,28 @@ const handleUploadBrochureSuccess = async (req: Request, res: Response) => {
       const base = path.basename(decodedName, ext).replace(/[^a-zA-Z0-9가-힣_.-]/g, "_");
       const safeFilename = `${base}_${Date.now()}${ext}`;
 
-      const blob = await put(`uploads/${safeFilename}`, req.file.buffer, {
-        access: 'public',
-        addRandomSuffix: false,
-      });
+      // Save file locally to uploads folder first
+      const localPath = path.join(UPLOADS_DIR, safeFilename);
+      fs.writeFileSync(localPath, req.file.buffer);
 
-      res.json({ success: true, filename: safeFilename, url: blob.url });
+      let url = `/uploads/${safeFilename}`;
+
+      // Try uploading to Vercel Blob if token is configured
+      if (process.env.BLOB_READ_WRITE_TOKEN) {
+        try {
+          const blob = await put(`uploads/${safeFilename}`, req.file.buffer, {
+            access: 'public',
+            addRandomSuffix: false,
+          });
+          if (blob && blob.url) {
+            url = blob.url;
+          }
+        } catch (blobErr: any) {
+          console.warn("Failed to upload to Vercel Blob, falling back to local file. Error:", blobErr.message);
+        }
+      }
+
+      res.json({ success: true, filename: safeFilename, url });
       return;
     }
     res.status(400).json({ success: false, error: "파일이 수신되지 않았습니다." });
@@ -1008,7 +1024,7 @@ app.post("/api/upload-brochure", (req: Request, res: Response, next: any) => {
     if (err) {
       // Handle multer-specific errors gracefully
       if (err.code === "LIMIT_FILE_SIZE") {
-        res.status(413).json({ success: false, error: `파일이 너무 큽니다. 최대 500MB까지 업로드 가능합니다. (오류: ${err.message})` });
+        res.status(413).json({ success: false, error: `파일이 너무 큽니다. 최대 200MB까지 업로드 가능합니다. (오류: ${err.message})` });
       } else {
         console.error("Multer upload error:", err);
         res.status(500).json({ success: false, error: "파일 업로드 처리 중 오류: " + err.message });
@@ -1036,12 +1052,28 @@ app.post("/api/upload-brochure-base64", async (req: Request, res: Response) => {
     const base = path.basename(filename, ext).replace(/[^a-zA-Z0-9가-힣_.-]/g, "_");
     const safeFilename = `${base}_${Date.now()}${ext}`;
     
-    const blob = await put(`uploads/${safeFilename}`, buffer, {
-      access: 'public',
-      addRandomSuffix: false,
-    });
+    // Save file locally to uploads folder first
+    const localPath = path.join(UPLOADS_DIR, safeFilename);
+    fs.writeFileSync(localPath, buffer);
 
-    res.json({ success: true, filename: safeFilename, url: blob.url });
+    let url = `/uploads/${safeFilename}`;
+
+    // Try uploading to Vercel Blob if token is configured
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      try {
+        const blob = await put(`uploads/${safeFilename}`, buffer, {
+          access: 'public',
+          addRandomSuffix: false,
+        });
+        if (blob && blob.url) {
+          url = blob.url;
+        }
+      } catch (blobErr: any) {
+        console.warn("Failed to upload to Vercel Blob, falling back to local file. Error:", blobErr.message);
+      }
+    }
+
+    res.json({ success: true, filename: safeFilename, url });
   } catch (err: any) {
     console.error("Base64 file upload error:", err);
     res.status(500).json({ success: false, error: "파일 우회 업로드 실패: " + err.message });
