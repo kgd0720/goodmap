@@ -2716,7 +2716,7 @@ export default function App() {
       const updatedBrochures = [...adminBrochures, newBrochure];
 
       // Save to server
-      const saveData = await saveToSupabase(updatedBrochures, adminVideos, typeof id !== 'undefined' ? 'brochures' : undefined, typeof id !== 'undefined' ? id : undefined);
+      const saveData = await saveToSupabase(updatedBrochures, adminVideos, undefined, undefined);
       if (saveData.success) {
         setAdminBrochures(updatedBrochures);
         setBrochureTitle("");
@@ -2756,7 +2756,7 @@ export default function App() {
     );
 
     try {
-      const saveData = await saveToSupabase(updatedBrochures, adminVideos, typeof id !== 'undefined' ? 'brochures' : undefined, typeof id !== 'undefined' ? id : undefined);
+      const saveData = await saveToSupabase(updatedBrochures, adminVideos, undefined, undefined);
       if (saveData.success) {
         setAdminBrochures(updatedBrochures);
         setEditingBrochureId(null);
@@ -2774,7 +2774,7 @@ export default function App() {
     if (!(await safeConfirm("선택하신 브로슈어를 정말 삭제하시겠습니까?", "브로슈어 삭제"))) return;
     const updatedBrochures = adminBrochures.filter(b => String(b.id).trim() !== String(id).trim());
     try {
-      const saveData = await saveToSupabase(updatedBrochures, adminVideos, typeof id !== 'undefined' ? 'brochures' : undefined, typeof id !== 'undefined' ? id : undefined);
+      const saveData = await saveToSupabase(updatedBrochures, adminVideos, 'brochures', id);
       if (saveData.success) {
         setAdminBrochures(updatedBrochures);
         await safeAlert("브로슈어가 정상적으로 삭제되었습니다.", "삭제 완료");
@@ -2852,7 +2852,7 @@ export default function App() {
     const updatedVideos = [...adminVideos, newVideo];
 
     try {
-      const saveData = await saveToSupabase(adminBrochures, updatedVideos, typeof id !== 'undefined' ? 'videos' : undefined, typeof id !== 'undefined' ? id : undefined);
+      const saveData = await saveToSupabase(adminBrochures, updatedVideos, undefined, undefined);
       if (saveData.success) {
         setAdminVideos(updatedVideos);
         setVideoTitle("");
@@ -2873,7 +2873,7 @@ export default function App() {
     if (!(await safeConfirm("선택하신 동영상을 정말 삭제하시겠습니까?", "동영상 삭제"))) return;
     const updatedVideos = adminVideos.filter(v => String(v.id).trim() !== String(id).trim());
     try {
-      const saveData = await saveToSupabase(adminBrochures, updatedVideos, typeof id !== 'undefined' ? 'videos' : undefined, typeof id !== 'undefined' ? id : undefined);
+      const saveData = await saveToSupabase(adminBrochures, updatedVideos, 'videos', id);
       if (saveData.success) {
         setAdminVideos(updatedVideos);
         await safeAlert("홍보 동영상이 삭제되었습니다.", "삭제 완료");
@@ -3056,7 +3056,7 @@ export default function App() {
 
       const updatedBrochures = [...adminBrochures, ...uploadedItems];
 
-      const saveData = await saveToSupabase(updatedBrochures, adminVideos, typeof id !== 'undefined' ? 'brochures' : undefined, typeof id !== 'undefined' ? id : undefined);
+      const saveData = await saveToSupabase(updatedBrochures, adminVideos, undefined, undefined);
       if (saveData.success) {
         setAdminBrochures(updatedBrochures);
         setBulkBrochures([]);
@@ -3129,7 +3129,7 @@ export default function App() {
 
       const updatedVideos = [...adminVideos, ...newItems];
 
-      const saveData = await saveToSupabase(adminBrochures, updatedVideos, typeof id !== 'undefined' ? 'videos' : undefined, typeof id !== 'undefined' ? id : undefined);
+      const saveData = await saveToSupabase(adminBrochures, updatedVideos, undefined, undefined);
       if (saveData.success) {
         setAdminVideos(updatedVideos);
         setBulkVideos([]);
