@@ -178,7 +178,7 @@ export default function ScheduleView({ setView }: ScheduleViewProps) {
           <div className="w-16 h-16 rounded-full bg-[#0B3B24]/5 text-[#0B3B24] flex items-center justify-center mx-auto border-2 border-[#C5A059]">
             <Lock className="w-8 h-8 text-[#C5A059]" />
           </div>
-          
+
           <div>
             <h2 className="text-2xl font-black text-slate-800 font-sans">캠퍼스 인증키 입력</h2>
             <p className="text-slate-500 text-xs mt-1 leading-relaxed font-semibold">
@@ -283,7 +283,7 @@ export default function ScheduleView({ setView }: ScheduleViewProps) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
+
         {/* Left: 8-Week Timeline checklists */}
         <div className="lg:col-span-7 space-y-4">
           <h3 className="text-lg font-black text-slate-800 flex items-center">
@@ -296,13 +296,11 @@ export default function ScheduleView({ setView }: ScheduleViewProps) {
               const isWeekCompleted = item.tasks.every(t => scheduleCheckedWeeks[t.id]);
               return (
                 <div key={item.week} className="relative space-y-2">
-                  <div className={`absolute -left-[26px] top-1.5 w-3 h-3 rounded-full border-2 transition-colors ${
-                    isWeekCompleted ? "bg-[#C5A059] border-[#0B3B24]" : "bg-white border-[#0B3B24]/40"
-                  }`} />
+                  <div className={`absolute -left-[26px] top-1.5 w-3 h-3 rounded-full border-2 transition-colors ${isWeekCompleted ? "bg-[#C5A059] border-[#0B3B24]" : "bg-white border-[#0B3B24]/40"
+                    }`} />
 
-                  <div className={`p-4 rounded-xl border transition-all ${
-                    isWeekCompleted ? "bg-emerald-50/40 border-emerald-200" : "bg-white border-slate-200"
-                  }`}>
+                  <div className={`p-4 rounded-xl border transition-all ${isWeekCompleted ? "bg-emerald-50/40 border-emerald-200" : "bg-white border-slate-200"
+                    }`}>
                     <div className="flex justify-between items-center mb-2.5">
                       <h4 className="font-black text-sm text-[#0B3B24]">{item.title}</h4>
                       {isWeekCompleted && (
@@ -316,9 +314,8 @@ export default function ScheduleView({ setView }: ScheduleViewProps) {
                         return (
                           <label
                             key={task.id}
-                            className={`flex items-start space-x-3 p-2 rounded-lg cursor-pointer transition-colors ${
-                              isChecked ? "bg-emerald-50/10 text-slate-500" : "hover:bg-slate-50"
-                            }`}
+                            className={`flex items-start space-x-3 p-2 rounded-lg cursor-pointer transition-colors ${isChecked ? "bg-emerald-50/10 text-slate-500" : "hover:bg-slate-50"
+                              }`}
                           >
                             <input
                               type="checkbox"
@@ -349,7 +346,7 @@ export default function ScheduleView({ setView }: ScheduleViewProps) {
 
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
             <form onSubmit={handleDecisionSave} className="space-y-5">
-              
+
               <div className="space-y-2.5">
                 <label className="text-xs font-black text-slate-700 block">💰 학원 수강료 설정 (월 기준)</label>
                 <div className="grid grid-cols-2 gap-3">
@@ -404,11 +401,10 @@ export default function ScheduleView({ setView }: ScheduleViewProps) {
                       key={opt}
                       type="button"
                       onClick={() => setOperationalDecisions({ ...operationalDecisions, nativeClasses: opt })}
-                      className={`py-2 text-xs font-bold rounded-lg border transition-all ${
-                        operationalDecisions.nativeClasses === opt
+                      className={`py-2 text-xs font-bold rounded-lg border transition-all ${operationalDecisions.nativeClasses === opt
                           ? "border-[#0B3B24] bg-[#0B3B24]/5 text-[#0B3B24]"
                           : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-                      }`}
+                        }`}
                     >
                       {opt}
                     </button>

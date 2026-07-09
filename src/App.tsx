@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, startTransition } from "react";
+import React, { useState, useEffect, useRef, useTransition, startTransition } from "react";
+import { supabase } from "./lib/supabaseClient";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowRight,
@@ -861,6 +862,52 @@ export default function App() {
   // Option comments state & fetching
   const [optionComments, setOptionComments] = useState<any[]>([]);
 
+  
+  const saveToSupabase = async (bList: any[], vList: any[], delType?: string, delId?: string) => {
+    try {
+      if (delType === 'brochures' && delId) {
+        await supabase.from('brochures').delete().eq('id', delId);
+      }
+      if (delType === 'videos' && delId) {
+        await supabase.from('videos').delete().eq('id', delId);
+      }
+      
+      for (let i = 0; i < bList.length; i++) {
+        const item = { ...bList[i], sort_order: i }; 
+        if (item.is_visible === undefined) item.is_visible = true; 
+        delete item.urls; 
+        await supabase.from('brochures').upsert(item);
+      }
+      for (let i = 0; i < vList.length; i++) {
+        const item = { ...vList[i], sort_order: i }; 
+        if (item.is_visible === undefined) item.is_visible = true; 
+        delete item.uploadedAt; 
+        await supabase.from('videos').upsert(item);
+      }
+      return { success: true };
+    } catch (e: any) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  };
+  const fetchBrandConfig = async () => {
+    try {
+      const { data: bData, error: bError } = await supabase
+        .from('brochures')
+        .select('*')
+        .order('sort_order', { ascending: true });
+      if (!bError && bData) setAdminBrochures(bData);
+
+      const { data: vData, error: vError } = await supabase
+        .from('videos')
+        .select('*')
+        .order('sort_order', { ascending: true });
+      if (!vError && vData) setAdminVideos(vData);
+    } catch (e) {
+      console.error("Failed to fetch brand config from Supabase", e);
+    }
+  };
+
   // Excel registration popup modal state
   const [uploadModalResult, setUploadModalResult] = useState<{
     isOpen: boolean;
@@ -956,18 +1003,7 @@ export default function App() {
     }
   };
 
-  const fetchBrandConfig = async () => {
-    try {
-      const res = await fetch("/api/brand-config");
-      const data = await res.json();
-      if (data.success && data.config) {
-        setAdminBrochures(data.config.brochures || []);
-        setAdminVideos(data.config.videos || []);
-      }
-    } catch (e) {
-      console.error("Failed to fetch brand config", e);
-    }
-  };
+  
 
   const fetchQuestions = async () => {
     try {
@@ -2613,51 +2649,19 @@ export default function App() {
           let uploadData: any = null;
 
           try {
-            const formData = new FormData();
-            formData.append("file", file);
-
-            const uploadRes = await fetch("/api/upload-brochure", {
-              method: "POST",
-              body: formData,
-            });
-
-            if (uploadRes.ok) {
-              uploadData = await uploadRes.json();
-              if (uploadData.success) {
-                uploadSuccess = true;
-              }
+            const { data, error } = await supabase.storage
+              .from('brand_assets')
+              .upload(`brochures/${Date.now()}_${Math.random().toString(36).substring(2, 10)}.${file.name.split('.').pop()}`, file, { upsert: true });
+            
+            if (!error && data) {
+              const { data: publicUrlData } = supabase.storage.from('brand_assets').getPublicUrl(data.path);
+              uploadData = { success: true, url: publicUrlData.publicUrl };
+              uploadSuccess = true;
+            } else {
+              console.error('Supabase upload error:', error);
             }
-          } catch (multipartErr) {
-            console.warn(`Multipart upload failed for ${file.name}, attempting robust base64 fallback...`, multipartErr);
-          }
-
-          if (!uploadSuccess) {
-            try {
-              const base64Data = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result as string);
-                reader.onerror = (error) => reject(error);
-                reader.readAsDataURL(file);
-              });
-
-              const uploadRes = await fetch("/api/upload-brochure-base64", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  filename: file.name,
-                  base64Data: base64Data
-                })
-              });
-
-              if (uploadRes.ok) {
-                uploadData = await uploadRes.json();
-                if (uploadData.success) {
-                  uploadSuccess = true;
-                }
-              }
-            } catch (fallbackErr: any) {
-              console.error("Base64 upload failed", fallbackErr);
-            }
+          } catch (err) {
+            console.error('Upload exception:', err);
           }
 
           if (uploadSuccess && uploadData) {
@@ -2712,15 +2716,7 @@ export default function App() {
       const updatedBrochures = [...adminBrochures, newBrochure];
 
       // Save to server
-      const saveRes = await fetch("/api/brand-config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          brochures: updatedBrochures,
-          videos: adminVideos
-        })
-      });
-      const saveData = await saveRes.json();
+      const saveData = await saveToSupabase(updatedBrochures, adminVideos, typeof id !== 'undefined' ? 'brochures' : undefined, typeof id !== 'undefined' ? id : undefined);
       if (saveData.success) {
         setAdminBrochures(updatedBrochures);
         setBrochureTitle("");
@@ -2760,15 +2756,7 @@ export default function App() {
     );
 
     try {
-      const saveRes = await fetch("/api/brand-config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          brochures: updatedBrochures,
-          videos: adminVideos
-        })
-      });
-      const saveData = await saveRes.json();
+      const saveData = await saveToSupabase(updatedBrochures, adminVideos, typeof id !== 'undefined' ? 'brochures' : undefined, typeof id !== 'undefined' ? id : undefined);
       if (saveData.success) {
         setAdminBrochures(updatedBrochures);
         setEditingBrochureId(null);
@@ -2786,15 +2774,7 @@ export default function App() {
     if (!(await safeConfirm("선택하신 브로슈어를 정말 삭제하시겠습니까?", "브로슈어 삭제"))) return;
     const updatedBrochures = adminBrochures.filter(b => String(b.id).trim() !== String(id).trim());
     try {
-      const saveRes = await fetch("/api/brand-config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          brochures: updatedBrochures,
-          videos: adminVideos
-        })
-      });
-      const saveData = await saveRes.json();
+      const saveData = await saveToSupabase(updatedBrochures, adminVideos, typeof id !== 'undefined' ? 'brochures' : undefined, typeof id !== 'undefined' ? id : undefined);
       if (saveData.success) {
         setAdminBrochures(updatedBrochures);
         await safeAlert("브로슈어가 정상적으로 삭제되었습니다.", "삭제 완료");
@@ -2872,15 +2852,7 @@ export default function App() {
     const updatedVideos = [...adminVideos, newVideo];
 
     try {
-      const saveRes = await fetch("/api/brand-config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          brochures: adminBrochures,
-          videos: updatedVideos
-        })
-      });
-      const saveData = await saveRes.json();
+      const saveData = await saveToSupabase(adminBrochures, updatedVideos, typeof id !== 'undefined' ? 'videos' : undefined, typeof id !== 'undefined' ? id : undefined);
       if (saveData.success) {
         setAdminVideos(updatedVideos);
         setVideoTitle("");
@@ -2901,15 +2873,7 @@ export default function App() {
     if (!(await safeConfirm("선택하신 동영상을 정말 삭제하시겠습니까?", "동영상 삭제"))) return;
     const updatedVideos = adminVideos.filter(v => String(v.id).trim() !== String(id).trim());
     try {
-      const saveRes = await fetch("/api/brand-config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          brochures: adminBrochures,
-          videos: updatedVideos
-        })
-      });
-      const saveData = await saveRes.json();
+      const saveData = await saveToSupabase(adminBrochures, updatedVideos, typeof id !== 'undefined' ? 'videos' : undefined, typeof id !== 'undefined' ? id : undefined);
       if (saveData.success) {
         setAdminVideos(updatedVideos);
         await safeAlert("홍보 동영상이 삭제되었습니다.", "삭제 완료");
@@ -3092,16 +3056,7 @@ export default function App() {
 
       const updatedBrochures = [...adminBrochures, ...uploadedItems];
 
-      const saveRes = await fetch("/api/brand-config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          brochures: updatedBrochures,
-          videos: adminVideos
-        })
-      });
-
-      const saveData = await saveRes.json();
+      const saveData = await saveToSupabase(updatedBrochures, adminVideos, typeof id !== 'undefined' ? 'brochures' : undefined, typeof id !== 'undefined' ? id : undefined);
       if (saveData.success) {
         setAdminBrochures(updatedBrochures);
         setBulkBrochures([]);
@@ -3174,16 +3129,7 @@ export default function App() {
 
       const updatedVideos = [...adminVideos, ...newItems];
 
-      const saveRes = await fetch("/api/brand-config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          brochures: adminBrochures,
-          videos: updatedVideos
-        })
-      });
-
-      const saveData = await saveRes.json();
+      const saveData = await saveToSupabase(adminBrochures, updatedVideos, typeof id !== 'undefined' ? 'videos' : undefined, typeof id !== 'undefined' ? id : undefined);
       if (saveData.success) {
         setAdminVideos(updatedVideos);
         setBulkVideos([]);

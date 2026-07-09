@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import * as pdfjsLib from 'pdfjs-dist';
+import { supabase } from "../lib/supabaseClient";
 // @ts-ignore
 import HTMLFlipBook from "react-pageflip";
 // @ts-ignore
@@ -197,19 +198,31 @@ export default function BrandView({ setView }: BrandViewProps) {
   }, []);
 
   useEffect(() => {
-    fetch("/api/brand-config")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && data.config) {
-          setBrochures(data.config.brochures || []);
-          setVideos(data.config.videos || []);
-        }
+    const fetchData = async () => {
+      try {
+        const { data: bData, error: bError } = await supabase
+          .from('brochures')
+          .select('*')
+          .eq('is_visible', true)
+          .order('sort_order', { ascending: true });
+        
+        if (!bError && bData) setBrochures(bData);
+
+        const { data: vData, error: vError } = await supabase
+          .from('videos')
+          .select('*')
+          .eq('is_visible', true)
+          .order('sort_order', { ascending: true });
+          
+        if (!vError && vData) setVideos(vData);
+      } catch (err) {
+        console.error("Failed to fetch from Supabase:", err);
+      } finally {
         setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Failed to fetch brand config, using static fallback:", err);
-        setLoading(false);
-      });
+      }
+    };
+    
+    fetchData();
   }, []);
 
   // Helper to safely extract YouTube video ID from standard links
@@ -1106,15 +1119,11 @@ export default function BrandView({ setView }: BrandViewProps) {
               <ul className="space-y-3 text-xs font-semibold text-slate-600">
                 <li className="flex items-start space-x-2">
                   <span className="text-emerald-500 font-bold">✓</span>
-                  <span>초교 3개 밀착 반경 내 1개 캠퍼스 독점 상권 완벽 보장</span>
+                  <span>가맹비 파격 할인</span>
                 </li>
                 <li className="flex items-start space-x-2">
                   <span className="text-emerald-500 font-bold">✓</span>
-                  <span>설명회 현수막 및 전단 인쇄 시안 100% 무상 커스텀</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <span className="text-emerald-500 font-bold">✓</span>
-                  <span>출결 및 태블릿 전용 학습 LMS 3개월 면제 혜택</span>
+                  <span>시설지원금 지원</span>
                 </li>
               </ul>
             </div>
