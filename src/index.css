@@ -1,0 +1,111 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --color-primary-navy: #0B3B24; /* Geometric Balance Deep Green */
+  --color-brand-red: #0B3B24; /* Replace with Deep Green */
+  --color-gold: #C5A059; /* Geometric Balance Gold */
+  --color-navy-900: #0B3B24;
+  --color-navy-800: #F4F4F7;
+  --color-navy-700: #E5E7EB;
+  --color-navy-50: #FFFFFF;
+}
+
+html {
+  font-size: 14px;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #F4F4F7;
+  color: #1A1A1A;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Printer-friendly PDF/print-optimized layouts */
+@media print {
+  body {
+    background-color: #ffffff !important;
+    background-image: none !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+    line-height: 1.5 !important;
+  }
+  
+  /* Hide all screen element wrappers */
+  #app_header,
+  #main_content_body,
+  #app_footer_nav,
+  #mobile_menu_overlay,
+  #mobile_menu_drawer,
+  .no-print,
+  button,
+  iframe {
+    display: none !important;
+    height: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Display printable wrapper exclusively */
+  #printable_report_wrapper,
+  .print-optimized-report,
+  .print-active-fallback {
+    display: block !important;
+    visibility: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    margin: 0 !important;
+    padding: 12mm 15mm !important;
+    background-color: #ffffff !important;
+    color: #111111 !important;
+    font-family: "Inter", sans-serif !important;
+    box-shadow: none !important;
+  }
+
+  /* Print Page Breaking Rules */
+  .print-page-break {
+    page-break-after: always !important;
+    break-after: page !important;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  .print-avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Force background colors and borders in print preview */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+

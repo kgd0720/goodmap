@@ -1,0 +1,538 @@
+[
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 0,
+    "questionText": "원장 경력이 있나요?",
+    "score": 1,
+    "scoreText": "없음 or 타과목 운영",
+    "comment": "초등영어 운영 경험이 없는 상태로서 대응과 관리에 어려움이 있을 것으로 판단되기에 경력이 많은 강사 및 상담실장을 채용하는 것을 추천합니다."
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 0,
+    "questionText": "원장 경력이 있나요?",
+    "score": 2,
+    "scoreText": "초등영어학원 1년 미만 or 입시영어",
+    "comment": "초등영어 운영 경험이 없는 상태로서 대응과 관리에 어려움이 있을 것으로 판단되기에 경력이 많은 강사 및 상담실장을 채용하는 것을 추천합니다."
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 0,
+    "questionText": "원장 경력이 있나요?",
+    "score": 3,
+    "scoreText": "초등영어학원 1~3년",
+    "comment": "학원 운영 경험을 가지고 있어 상담 및 강사관리에는 문제가 없으나 영어학원과 어학원의 차이에 대한 이해와 분석이 필요합니다. 현재 경력이 많은 강사를 배치하여 상담과 관리에 더 집중하는 것을 추천드립니다. "
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 0,
+    "questionText": "원장 경력이 있나요?",
+    "score": 4,
+    "scoreText": "초등영어학원 3년이상",
+    "comment": "학원 운영 경험을 가지고 있어 상담 및 강사관리에는 문제가 없으나 영어학원과 어학원의 차이에 대한 이해와 분석이 필요합니다. 현재 경력이 많은 강사를 배치하여 상담과 관리에 더 집중하는 것을 추천드립니다. "
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 0,
+    "questionText": "원장 경력이 있나요?",
+    "score": 5,
+    "scoreText": "초등어학원 운영",
+    "comment": "영어학원과 어학원의 장단점을 파악하고 있는 상태로서 개인으로도 문제없으나 브랜드로 시작할 경우 더 큰 성장을 기대할 수 있습니다."
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 1,
+    "questionText": "영어 수업 경력이 있나요?",
+    "score": 1,
+    "scoreText": "전혀 없음",
+    "comment": "경력이 많은 강사를 채용하여 수업 및 원생관리를 빈틈없도록 구축하고 상담과 관리에 더 집중하는 것을 추천드립니다. "
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 1,
+    "questionText": "영어 수업 경력이 있나요?",
+    "score": 2,
+    "scoreText": "1년 미만",
+    "comment": "경력이 많은 강사를 채용하여 수업 및 원생관리를 빈틈없도록 구축하고 상담과 관리에 더 집중하는 것을 추천드립니다. "
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 1,
+    "questionText": "영어 수업 경력이 있나요?",
+    "score": 3,
+    "scoreText": "1~3년",
+    "comment": "수업 준비 및 진행에 문제가 없지만 경험이 많지 않아서 다양한 상황별 대응에 어려움이 있을 수 있기에 가급적 어학원 경험이 3년이상인 강사를 배치가 필요합니다. "
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 1,
+    "questionText": "영어 수업 경력이 있나요?",
+    "score": 4,
+    "scoreText": "3~5년",
+    "comment": "수업 준비 및 진행에 문제가 없으며 상황별 최대한 대응이 가능하기에 2~3년이상 어학원 경력을 가진 강사를 배치할 것을 추천드립니다."
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 1,
+    "questionText": "영어 수업 경력이 있나요?",
+    "score": 5,
+    "scoreText": "5년 이상",
+    "comment": "수업의 준비와 완성도가 높을 것으로 판단됩니다. "
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 2,
+    "questionText": "현재 창업 가능 자본은 어느 정도인가요?",
+    "score": 1,
+    "scoreText": "5천만원 미만",
+    "comment": "교습소 개원 가능."
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 2,
+    "questionText": "현재 창업 가능 자본은 어느 정도인가요?",
+    "score": 2,
+    "scoreText": "5천만원~1억원",
+    "comment": "공부방,교습소 개원 가능하며 구도시에서 학원매매를 통한 개원가능"
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 2,
+    "questionText": "현재 창업 가능 자본은 어느 정도인가요?",
+    "score": 3,
+    "scoreText": "1억원~1억5천만원",
+    "comment": "소형 평수내에서 개원 가능하며 건물위치 또는 도시개발기간에 따라 중형 평수에서도 개원가능. 학원매매를 검토 필요. 평당 5~10만원이내 임대료 건물"
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 2,
+    "questionText": "현재 창업 가능 자본은 어느 정도인가요?",
+    "score": 4,
+    "scoreText": "1억5천만원~2억원",
+    "comment": "중형 평수내에서 개원 가능,도시개발기간이 짧은 경우 학원매매 형태로 개원가능,평당 10~15만원이내의 임대료 건물"
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 2,
+    "questionText": "현재 창업 가능 자본은 어느 정도인가요?",
+    "score": 5,
+    "scoreText": "2억원 이상",
+    "comment": "대형 평수까지 개원 가능,평당 15~20만원이내의 임대료 건물"
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 3,
+    "questionText": "학부모 상담 경험이 있나요?",
+    "score": 1,
+    "scoreText": "없음",
+    "comment": "상담 경험이 없는 상태로서 직영 또는 본사로부터 상담 매뉴얼을 통한 훈련 필요합니다. "
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 3,
+    "questionText": "학부모 상담 경험이 있나요?",
+    "score": 2,
+    "scoreText": "재원생 학부모 상담",
+    "comment": "재원생 학부모 상담 경험은 있으나 신규 상담시 필요한 레벨테스트,준비자료 등 훈련이 필요합니다."
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 3,
+    "questionText": "학부모 상담 경험이 있나요?",
+    "score": 3,
+    "scoreText": "신규 학부모 상담",
+    "comment": "신규 학부모 상담 경험은 있으나 재원생 학부모에 대한 상담 훈련이 필요합니다. "
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 3,
+    "questionText": "학부모 상담 경험이 있나요?",
+    "score": 4,
+    "scoreText": "신규+재원생 학부모 상담",
+    "comment": "신규, 재원생 상담 모두 경험이 있어 학원 운영에 충분한 상담 역량을 갖추고 있습니다. 상담 후 등록 전환율을 꾸준히 분석해 지속적으로 개선하세요."
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 4,
+    "questionText": "수업계획 수립 및 시간표 작성 경험이 있나요?",
+    "score": 1,
+    "scoreText": "없음",
+    "comment": "개원 초기에는 본사 연구진이 설계한 표준안을 진행하면서 분석하여 자신의 학원에 맞게 변형을 준비하세요."
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 4,
+    "questionText": "수업계획 수립 및 시간표 작성 경험이 있나요?",
+    "score": 2,
+    "scoreText": "수업반 수업계획수립 경험",
+    "comment": "해당 수업에 대한 계획수립만 가능하기에 전체 수업에 있어 동일성 및 차별성을 분석하여 제시하는 능력을 키울 필요가 있습니다. "
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 4,
+    "questionText": "수업계획 수립 및 시간표 작성 경험이 있나요?",
+    "score": 3,
+    "scoreText": "학원전체 수업계획 경험",
+    "comment": "학원 교재별 통일된 수업방식과 레벨별 특성에 맞는 수업을 파악하여 제시할 수 있으나 학원의 전체 시간표 설계한 경험이 없으므로 본사 직영 또는 지원을 적극 활용하여 효율적인 사간표를 구축하세요."
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 4,
+    "questionText": "수업계획 수립 및 시간표 작성 경험이 있나요?",
+    "score": 4,
+    "scoreText": "학원전체 수업계획 +시간표 작성",
+    "comment": "수업 계획 수립부터 시간표 작성까지 모두 직접 설계할 수 있어 개원 초기 운영 안정성이 높습니다. 가맹 커리큘럼 특성을 빠르게 파악하고 기존 경험을 접목해 최적화된 학사 구조를 만드세요."
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 5,
+    "questionText": "강사 및 스탭 관리 경험이 있나요?",
+    "score": 1,
+    "scoreText": "없음",
+    "comment": "스탭관리 경험이 없는 상태로서 본사 컨설턴트 제안에 맞춰 채용하고 운영하면서 추가 보완 인력을 확인하세요. "
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 5,
+    "questionText": "강사 및 스탭 관리 경험이 있나요?",
+    "score": 2,
+    "scoreText": "강사관리 경험",
+    "comment": "강사 관리 경험이 있어 수업과 재원생관리에 문제가 없으나 상담실장,데스크직원,랩실관리강사,차량기사 등 스탭에 업무를 정확하게 파악하여 업무 분배가 정확하게 이루어질수 있도록 하세요."
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 5,
+    "questionText": "강사 및 스탭 관리 경험이 있나요?",
+    "score": 3,
+    "scoreText": "스탭관리 경험",
+    "comment": "스탭(상담실장,데스크직원,랩실관리강사,차량기사) 관리 경험이 있어 행정 운영 역량을 갖추고 있습니다. 직영 또는 컨설턴트를 통해 강사 관리방법을 배우세요. "
+  },
+  {
+    "franchiseType": "신규 창업",
+    "questionIndex": 5,
+    "questionText": "강사 및 스탭 관리 경험이 있나요?",
+    "score": 4,
+    "scoreText": "강사+스탭 관리 경험",
+    "comment": "강사스탭 관리 경험을 모두 보유하고 있어 팀 운영 여력이 우수합니다. 업무 및 관리방식을 체계화하여 효율성을 높이도록 하세요."
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 0,
+    "questionText": "현재 운영 형태는 무엇인가요?",
+    "score": 1,
+    "scoreText": "유치원·어린이집",
+    "comment": "초등영어 운영 경험이 없는 상태로서 대응과 관리에 어려움이 있을 것으로 판단되기에 경력이 많은 강사 및 상담실장을 채용하는 것을 추천합니다."
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 0,
+    "questionText": "현재 운영 형태는 무엇인가요?",
+    "score": 2,
+    "scoreText": "타과목 학원",
+    "comment": "타과목을 운영한 경험이 있기에 상담에는 기본 능력은 있으나 영어에 대한 지식과 본사 커리큘럼의 이해, 어학원의 장단점을 이해하는 것이 필요합니다. "
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 0,
+    "questionText": "현재 운영 형태는 무엇인가요?",
+    "score": 3,
+    "scoreText": "종합학원",
+    "comment": "종합학원을 운영하기에 영어과목에 대한 이해는 있으나 영어과목을 어학원으로 운영하지 않았다면 관리 및 수업에 시스템을 조정하고 공간 구획을 새롭게 정렬하는 것을 추천합니다. "
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 0,
+    "questionText": "현재 운영 형태는 무엇인가요?",
+    "score": 4,
+    "scoreText": "영어보습학원",
+    "comment": "영어보습학원을 운영하고 있기에 학원운영에 대한 기본 능력은 있으나 내신중심으로 영어를 교육하고 있었다면 어학중심의 수업 전환에 대한 준비가 필요합니다. "
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 0,
+    "questionText": "현재 운영 형태는 무엇인가요?",
+    "score": 5,
+    "scoreText": "어학원",
+    "comment": "어학원 운영 경험이 있어 브랜드 전환 적용이 빠를 것으로 예상됩니다. "
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 1,
+    "questionText": "현재 운영 공간 규모는?",
+    "score": 1,
+    "scoreText": "소형 (30평 미만)",
+    "comment": "현재 공간상 어학원을 개원하기 어려운 상태이기에 공간 이전 및 확장을 검토할 필요가 있습니다. "
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 1,
+    "questionText": "현재 운영 공간 규모는?",
+    "score": 2,
+    "scoreText": "소형 (30~40평)",
+    "comment": "현재 공간이 소형 (30~40평) 규모로 효율적 배치가 필요합니다. 교실당 적정 인원 분배와 스마트 기기 배치 효율을 높여 공간 당 회전율을 극대화하십시오. 서울지역을 제외하고 어학원 설립 요건을 충족하므로 전환에 걸림돌이 없습니다."
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 1,
+    "questionText": "현재 운영 공간 규모는?",
+    "score": 3,
+    "scoreText": "중형 (40~50평)",
+    "comment": "현재 공간이 중형 (40~50평) 규모로 어학원 운영이 가능합니다. 교실 배치 효율화를 통해 최대 4개 교실과 랩실 구성을 권장합니다."
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 1,
+    "questionText": "현재 운영 공간 규모는?",
+    "score": 4,
+    "scoreText": "중형 (50~70평)",
+    "comment": "현재 공간이 중형 (50~70평) 규모로 안정적인 어학원 운영이 가능합니다. 레벨별 분반 구성과 상담 공간 분리 등 쾌적한 학습 환경 조성에 투자하세요."
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 1,
+    "questionText": "현재 운영 공간 규모는?",
+    "score": 5,
+    "scoreText": "대형 (80평 이상)",
+    "comment": "현재 공간이 대형 (80평 이상) 규모로 넓은 대학원급 어학원 운영이 가능합니다. 공간 세분화, 자체 강의실 구성, 대기 공간 등을 갖춰 고급화 프리미엄 이미지를 강화하세요."
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 2,
+    "questionText": "현재 재원생 규모는?",
+    "score": 1,
+    "scoreText": "30명 이하",
+    "comment": "개선이 필요한 상태로 파악되며 현재의 보완사항을 파악하여 대안을 모색할 필요가 있습니다."
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 2,
+    "questionText": "현재 재원생 규모는?",
+    "score": 2,
+    "scoreText": "30~50명",
+    "comment": "개선이 필요한 상태로 파악되며 현재의 보완사항을 파악하여 대안을 모색할 필요가 있습니다."
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 2,
+    "questionText": "현재 재원생 규모는?",
+    "score": 3,
+    "scoreText": "50~100명",
+    "comment": "성장이 필요한 상태로 파악되며 현재의 장단점을 파악하여 대안을 모색할 필요가 있습니다."
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 2,
+    "questionText": "현재 재원생 규모는?",
+    "score": 4,
+    "scoreText": "100~200명",
+    "comment": "성장이 필요한 상태로 파악되며 현재의 장단점을 파악하여 대안을 모색할 필요가 있습니다."
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 2,
+    "questionText": "현재 재원생 규모는?",
+    "score": 5,
+    "scoreText": "200명 이상",
+    "comment": "안정적인 상태로 파악되며 보완사항을 점검하여 개선할 필요가 있습니다. "
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 3,
+    "questionText": "영어학원 원장 경력이 있나요?",
+    "score": 1,
+    "scoreText": "없음",
+    "comment": "초등영어 운영 경험이 없는 상태로서 대응과 관리에 어려움이 있을 것으로 판단되기에 경력이 많은 강사 및 상담실장을 채용하는 것을 추천합니다."
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 3,
+    "questionText": "영어학원 원장 경력이 있나요?",
+    "score": 2,
+    "scoreText": "1년 미만",
+    "comment": "초등영어 운영 경험이 없는 상태로서 대응과 관리에 어려움이 있을 것으로 판단되기에 경력이 많은 강사 및 상담실장을 채용하는 것을 추천합니다."
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 3,
+    "questionText": "영어학원 원장 경력이 있나요?",
+    "score": 3,
+    "scoreText": "1~3년",
+    "comment": "학원 운영 경험을 가지고 있어 상담 및 강사관리에는 문제가 없으나 영어학원과 어학원의 차이에 대한 이해와 분석이 필요합니다. 현재 경력이 많은 강사를 배치하여 상담과 관리에 더 집중하는 것을 추천드립니다. "
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 3,
+    "questionText": "영어학원 원장 경력이 있나요?",
+    "score": 4,
+    "scoreText": "3~5년",
+    "comment": "학원 운영 경험을 가지고 있어 상담 및 강사관리에는 문제가 없으나 영어학원과 어학원의 차이에 대한 이해와 분석이 필요합니다. 현재 경력이 많은 강사를 배치하여 상담과 관리에 더 집중하는 것을 추천드립니다. "
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 3,
+    "questionText": "영어학원 원장 경력이 있나요?",
+    "score": 5,
+    "scoreText": "5년 이상",
+    "comment": "영어학원과 어학원의 장단점을 파악하고 있는 상태로서 개인으로도 문제없으나 브랜드로 시작할 경우 더 큰 성장을 기대할 수 있습니다."
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 4,
+    "questionText": "영어 수업 경력이 있나요?",
+    "score": 1,
+    "scoreText": "없음",
+    "comment": "경력이 많은 강사를 채용하여 수업 및 원생관리를 빈틈없도록 구축하고 상담과 관리에 더 집중하는 것을 추천드립니다. "
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 4,
+    "questionText": "영어 수업 경력이 있나요?",
+    "score": 2,
+    "scoreText": "1년 미만",
+    "comment": "경력이 많은 강사를 채용하여 수업 및 원생관리를 빈틈없도록 구축하고 상담과 관리에 더 집중하는 것을 추천드립니다. "
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 4,
+    "questionText": "영어 수업 경력이 있나요?",
+    "score": 3,
+    "scoreText": "1~3년",
+    "comment": "수업 준비 및 진행에 문제가 없지만 경험이 많지 않아서 다양한 상황별 대응에 어려움이 있을 수 있기에 가급적 어학원 경험이 3년이상인 강사를 배치가 필요합니다. "
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 4,
+    "questionText": "영어 수업 경력이 있나요?",
+    "score": 4,
+    "scoreText": "3~5년",
+    "comment": "수업 준비 및 진행에 문제가 없으며 상황별 최대한 대응이 가능하기에 2~3년이상 어학원 경력을 가진 강사를 배치할 것을 추천드립니다."
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 4,
+    "questionText": "영어 수업 경력이 있나요?",
+    "score": 5,
+    "scoreText": "5년 이상",
+    "comment": "수업의 준비와 완성도가 높을 것으로 판단됩니다. "
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 5,
+    "questionText": "브랜드 전환을 위해 투자 가능한 자본은?",
+    "score": 1,
+    "scoreText": "1천만원 미만",
+    "comment": "현재 예산으로는 전반적인 개선보다 일부 개선이 가능한 예산이므로 극히 보수적인 부분 수선 리뉴얼 접근을 권유합니다."
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 5,
+    "questionText": "브랜드 전환을 위해 투자 가능한 자본은?",
+    "score": 2,
+    "scoreText": "1천만원~3천만원",
+    "comment": "현재 예산은 전반적인 개선보다 일부 개선이 가능한 예산이므로, 전체 교체보다는 선별된 부분 개선과 노후 설비 보완 위주로 스마트하게 자본을 배치하는 것을 권장합니다."
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 5,
+    "questionText": "브랜드 전환을 위해 투자 가능한 자본은?",
+    "score": 3,
+    "scoreText": "3천만원~5천만원",
+    "comment": "현재 예산으로는 전체적인 환경 개선이 가능하며 필요한 마케팅은 가능한 상태입니다. "
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 5,
+    "questionText": "브랜드 전환을 위해 투자 가능한 자본은?",
+    "score": 4,
+    "scoreText": "5천만원~7천만원",
+    "comment": "전체적인 환경 개선과 마케팅이 가능한 상태입니다. "
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 5,
+    "questionText": "브랜드 전환을 위해 투자 가능한 자본은?",
+    "score": 5,
+    "scoreText": "7천만원 이상",
+    "comment": "충분한 자본력을 바탕으로 적극적인 운영과 활발한 마케팅 지원을 더해 프리미엄 개원 효과를 극대화할 수 있습니다."
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 6,
+    "questionText": "지역내 학부모 소득(건강보험료 기준)은?",
+    "score": 1,
+    "scoreText": "없음",
+    "comment": "월 20만원미만 수강료 책정 가능. 수강료부담이 높기에 단과목보다 공부방,교습소 선호"
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 6,
+    "questionText": "지역내 학부모 소득(건강보험료 기준)은?",
+    "score": 2,
+    "scoreText": "월 10만원 내외 (약 월 400만원)",
+    "comment": "월 20~25만원내 수강료 책정 가능. 단과목 수강료 부담이 높기에 할인 혜택 필요"
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 6,
+    "questionText": "지역내 학부모 소득(건강보험료 기준)은?",
+    "score": 3,
+    "scoreText": "월 20만원 내외 (약 월 700만원)",
+    "comment": "월 ~30만원까지 책정 가능"
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 6,
+    "questionText": "지역내 학부모 소득(건강보험료 기준)은?",
+    "score": 4,
+    "scoreText": "월 30만원 내외 (약 월 900만원)",
+    "comment": "월 ~35만원까지 책정 가능"
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 6,
+    "questionText": "지역내 학부모 소득(건강보험료 기준)은?",
+    "score": 5,
+    "scoreText": "월 40만원 이상(약 월 1000만원 이상)",
+    "comment": "월 ~40만원까지 책정 가능"
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 7,
+    "questionText": "지역내 초등학생수는?",
+    "score": 1,
+    "scoreText": "1,000명 미만",
+    "comment": "개발진행 지역이 아닌경우 원생확보가 어려운 지역으로서 해당인원이 학교 2곳이상일 경우 1~2년이내 이전 계획 권장"
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 7,
+    "questionText": "지역내 초등학생수는?",
+    "score": 2,
+    "scoreText": "1,000~1,500명",
+    "comment": "개발진행 지역이 아닌경우 원생확보가 어려운 지역으로서 해당인원이 학교 2곳이상일 경우 2~3년이내 이전 계획 권장"
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 7,
+    "questionText": "지역내 초등학생수는?",
+    "score": 3,
+    "scoreText": "1,500~2,500명",
+    "comment": "현재 학생수는 운영에 문제가 없는 지역이나 해당인원이 학교 3곳이상일 경우 3~5년이내 이전 계획 권장"
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 7,
+    "questionText": "지역내 초등학생수는?",
+    "score": 4,
+    "scoreText": "2,500~3,500명",
+    "comment": "최상위 입지로서 경쟁자가 다수 있을 것으로 판단되어 차별성을 강조하여 지역내 입지를 다질 필요가 있음. 5년이상 운영 가능지역"
+  },
+  {
+    "franchiseType": "브랜드 전환",
+    "questionIndex": 7,
+    "questionText": "지역내 초등학생수는?",
+    "score": 5,
+    "scoreText": "3,500명 이상",
+    "comment": "최상위 입지로서 경쟁자가 다수 있을 것으로 판단되어 차별성을 강조하여 지역내 입지를 다질 필요가 있음. 7년이상 운영 가능지역"
+  }
+]

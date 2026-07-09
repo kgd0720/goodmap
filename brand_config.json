@@ -1,0 +1,41 @@
+{
+  "brochures": [
+    {
+      "id": "b-1783450806549",
+      "title": "초중등영어전문 EiE가맹브로슈어_2024",
+      "description": "",
+      "filename": "초중등영어전문 EiE가맹브로슈어_2024_page1.jpg",
+      "url": "/uploads/초중등영어전문_EiE가맹브로슈어_2024_page1_1783450806400.jpg",
+      "urls": [
+        "/uploads/초중등영어전문_EiE가맹브로슈어_2024_page1_1783450806400.jpg",
+        "/uploads/초중등영어전문_EiE가맹브로슈어_2024_page2_1783450806421.jpg",
+        "/uploads/초중등영어전문_EiE가맹브로슈어_2024_page3_1783450806429.jpg",
+        "/uploads/초중등영어전문_EiE가맹브로슈어_2024_page4_1783450806441.jpg",
+        "/uploads/초중등영어전문_EiE가맹브로슈어_2024_page5_1783450806448.jpg",
+        "/uploads/초중등영어전문_EiE가맹브로슈어_2024_page6_1783450806458.jpg",
+        "/uploads/초중등영어전문_EiE가맹브로슈어_2024_page7_1783450806466.jpg",
+        "/uploads/초중등영어전문_EiE가맹브로슈어_2024_page8_1783450806476.jpg",
+        "/uploads/초중등영어전문_EiE가맹브로슈어_2024_page9_1783450806482.jpg",
+        "/uploads/초중등영어전문_EiE가맹브로슈어_2024_page10_1783450806492.jpg",
+        "/uploads/초중등영어전문_EiE가맹브로슈어_2024_page11_1783450806498.jpg",
+        "/uploads/초중등영어전문_EiE가맹브로슈어_2024_page12_1783450806508.jpg",
+        "/uploads/초중등영어전문_EiE가맹브로슈어_2024_page13_1783450806515.jpg",
+        "/uploads/초중등영어전문_EiE가맹브로슈어_2024_page14_1783450806527.jpg",
+        "/uploads/초중등영어전문_EiE가맹브로슈어_2024_page15_1783450806534.jpg",
+        "/uploads/초중등영어전문_EiE가맹브로슈어_2024_page16_1783450806545.jpg"
+      ],
+      "type": "images",
+      "allowDownload": true,
+      "uploadedAt": "2026-07-07T19:00:06.549Z"
+    }
+  ],
+  "videos": [
+    {
+      "id": "v-1783353200731",
+      "title": "EiE브랜드 소개영상",
+      "desc": "",
+      "youtubeUrl": "https://youtu.be/eEOLuq-n8R8",
+      "duration": "3:00"
+    }
+  ]
+}

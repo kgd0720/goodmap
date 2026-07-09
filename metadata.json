@@ -1,0 +1,6 @@
+{
+  "name": "KY Academy Consulting",
+  "description": "KY Academy Consulting 브랜드 소개, 개원진단 Opening Map, 비밀번호 기반 개원일정 스케줄러 및 시간표제작 시스템",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
