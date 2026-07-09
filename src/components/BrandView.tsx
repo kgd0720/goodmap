@@ -39,6 +39,14 @@ interface BrandViewProps {
   setView: (view: "hub" | "brand" | "home" | "step1" | "step2" | "quiz" | "result" | "admin" | "schedule" | "timetable") => void;
 }
 
+const Page = React.forwardRef((props: any, ref: React.Ref<HTMLDivElement>) => {
+  return (
+    <div className={`page bg-white shadow-xl overflow-hidden flex items-center justify-center border border-slate-200 ${props.className || ''}`} ref={ref} data-density={props['data-density']}>
+      {props.children}
+    </div>
+  );
+});
+
 const PdfPageRenderer = ({ pdfDoc, pageNumber }: { pdfDoc: pdfjsLib.PDFDocumentProxy, pageNumber: number }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [rendered, setRendered] = useState(false);
@@ -113,6 +121,8 @@ export default function BrandView({ setView }: BrandViewProps) {
   const [selectedBrochure, setSelectedBrochure] = useState<any | null>(null);
   
   const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
+  const [pdfLoading, setPdfLoading] = useState<boolean>(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   
   useEffect(() => {
     if (!selectedBrochure) {
@@ -123,6 +133,8 @@ export default function BrandView({ setView }: BrandViewProps) {
     if (isPdf) {
       const url = selectedBrochure.url || (selectedBrochure.urls && selectedBrochure.urls[0]);
       if (url) {
+        setPdfLoading(true);
+        setPdfError(null);
         const loadingTask = pdfjsLib.getDocument({ url });
         loadingTask.promise.then(doc => {
           setPdfDoc(doc);
@@ -130,10 +142,14 @@ export default function BrandView({ setView }: BrandViewProps) {
           setPdfCurrentPage(1);
         }).catch(err => {
           console.error("Failed to load PDF document:", err);
+          setPdfError(err.message || "PDF 파일을 불러오는데 실패했습니다.");
+        }).finally(() => {
+          setPdfLoading(false);
         });
       }
     } else {
       setPdfDoc(null);
+      setPdfError(null);
       if (selectedBrochure.urls) {
         setPdfTotalPages(selectedBrochure.urls.length);
         setPdfCurrentPage(1);
@@ -162,13 +178,22 @@ export default function BrandView({ setView }: BrandViewProps) {
   const [isPc, setIsPc] = useState<boolean>(
     typeof window !== "undefined" ? window.innerWidth >= 1024 : true
   );
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
 
   useEffect(() => {
     const handleResize = () => {
       setIsPc(window.innerWidth >= 1024);
     };
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
     window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -810,7 +835,7 @@ export default function BrandView({ setView }: BrandViewProps) {
       for (let i = 1; i <= pdfTotalPages; i++) {
         const isNear = Math.abs(i - pdfCurrentPage) <= 3;
         flipBookPages.push(
-          <div key={i} className="bg-white shadow-xl overflow-hidden flex items-center justify-center border border-slate-200" data-density={i === 1 || i === pdfTotalPages ? "hard" : "soft"}>
+          <Page key={i} data-density={i === 1 || i === pdfTotalPages ? "hard" : "soft"}>
             {isNear ? (
               <PdfPageRenderer pdfDoc={pdfDoc} pageNumber={i} />
             ) : (
@@ -818,15 +843,15 @@ export default function BrandView({ setView }: BrandViewProps) {
                 <RotateCcw className="w-6 h-6 animate-spin text-slate-300" />
               </div>
             )}
-          </div>
+          </Page>
         );
       }
     } else if (isImages && selectedBrochure.urls) {
       for (let i = 0; i < selectedBrochure.urls.length; i++) {
         flipBookPages.push(
-          <div key={i} className="bg-white shadow-xl overflow-hidden flex items-center justify-center border border-slate-200" data-density={i === 0 || i === selectedBrochure.urls.length - 1 ? "hard" : "soft"}>
+          <Page key={i} data-density={i === 0 || i === selectedBrochure.urls.length - 1 ? "hard" : "soft"}>
             <img src={selectedBrochure.urls[i]} alt={`Page ${i+1}`} className="w-full h-full object-contain pointer-events-none" draggable="false" />
-          </div>
+          </Page>
         );
       }
     }
@@ -840,17 +865,39 @@ export default function BrandView({ setView }: BrandViewProps) {
       );
     }
 
+    if (pdfLoading) {
+      return (
+        <div className="flex-1 w-full h-full flex flex-col items-center justify-center bg-slate-950 text-white">
+          <RotateCcw className="w-10 h-10 animate-spin text-slate-500 mb-4" />
+          <p className="font-bold">PDF 브로슈어를 불러오는 중입니다...</p>
+          <p className="text-xs text-slate-400 mt-2">잠시만 기다려주세요</p>
+        </div>
+      );
+    }
+
+    if (pdfError) {
+      return (
+        <div className="flex-1 w-full h-full flex flex-col items-center justify-center bg-slate-950 text-white p-6 text-center">
+          <FileText className="w-12 h-12 text-rose-500 mb-4" />
+          <p className="font-bold text-lg mb-2">PDF 로딩 실패</p>
+          <p className="text-sm text-slate-300 max-w-md bg-slate-900 p-3 rounded">{pdfError}</p>
+          <p className="text-[10px] text-slate-500 mt-4 break-all max-w-lg">파일 경로: {selectedBrochure.url || selectedBrochure.urls?.[0]}</p>
+        </div>
+      );
+    }
+
     if (flipBookPages.length === 0) {
       return (
-        <div className="flex-1 w-full h-full flex items-center justify-center bg-slate-950">
-          <RotateCcw className="w-8 h-8 animate-spin text-slate-500" />
+        <div className="flex-1 w-full h-full flex flex-col items-center justify-center bg-slate-950 text-slate-400">
+          <RotateCcw className="w-8 h-8 animate-spin mb-4" />
+          <p className="text-sm">페이지 구성 중...</p>
         </div>
       );
     }
 
     return (
-      <div className="flex-1 w-full h-full flex flex-col items-center justify-center select-none min-h-0 bg-slate-950 relative">
-        <div className="relative w-full h-full max-h-[85vh] flex items-center justify-center">
+      <div className={`flex-1 w-full h-full flex flex-col items-center justify-center select-none min-h-0 ${isFullscreen ? 'bg-black' : 'bg-slate-950'} relative overflow-hidden`}>
+        <div className="relative w-[80%] h-[80%] flex items-center justify-center" style={{ minHeight: "400px" }}>
           <HTMLFlipBook
             width={isPc ? 450 : 320}
             height={isPc ? 636 : 452}
@@ -1346,153 +1393,9 @@ export default function BrandView({ setView }: BrandViewProps) {
                 </div>
               </div>
 
-              {/* Main Interactive Stage */}
-              <div
-                className="flex-1 w-full flex items-center justify-center p-4 relative cursor-grab active:cursor-grabbing select-none overflow-hidden"
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                onMouseDown={(e) => handleDragStart(e.clientX, e.clientY)}
-                onMouseMove={(e) => handleDragMove(e.clientX, e.clientY)}
-                onMouseUp={handleDragEnd}
-                onMouseLeave={handleDragEnd}
-              >
-                {/* Reset view overlay notification when zoomed */}
-                {isDefaultBrochure && viewerZoom > 1.0 && (
-                  <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/60 backdrop-blur-xs text-[10px] text-slate-300 font-bold px-3 py-1 rounded-full z-10 pointer-events-none">
-                    🔍 {Math.round(viewerZoom * 100)}% 확대 모드 (드래그로 탐색 가능)
-                  </div>
-                )}
+              {/* Main Interactive Stage & Custom Brochure Viewer */}
+              {renderCustomBrochureViewer()}
 
-                {/* Booklet Container with responsive dimensions strictly constrained */}
-                {isDefaultBrochure ? (
-                  <div
-                    className="transition-transform duration-100 ease-out flex items-center justify-center"
-                    style={{
-                      transform: `scale(${viewerZoom}) translate(${panOffset.x / viewerZoom}px, ${panOffset.y / viewerZoom}px)`,
-                      width: "100%",
-                      height: "100%",
-                      maxWidth: isPc ? "1100px" : "400px",
-                    }}
-                  >
-                    <AnimatePresence mode="wait">
-                      <motion.div
-                        key={viewerPage}
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        transition={{ duration: 0.25 }}
-                        className="w-full h-full flex items-center justify-center"
-                      >
-                        {/* 2-PAGE PC SPREAD MODE */}
-                        {isPc ? (
-                          <div className="flex items-stretch justify-center gap-2.5 w-full h-[460px] sm:h-[520px] md:h-[560px] lg:h-[600px] max-h-[65vh]">
-                            {spreadIndices[1] === null ? (
-                              // Single Page (Cover or Back Cover) Centered
-                              <div className="w-full max-w-[380px] h-full shadow-2xl border border-slate-800/40 rounded-xl relative overflow-hidden shrink-0">
-                                {renderDigitalPage(spreadIndices[0])}
-                              </div>
-                            ) : (
-                              // Two Pages side by side
-                              <>
-                                <div className="w-1/2 max-w-[390px] h-full shadow-2xl border-r border-slate-200/10 rounded-l-xl relative overflow-hidden">
-                                  {renderDigitalPage(spreadIndices[0])}
-                                </div>
-                                <div className="w-1/2 max-w-[390px] h-full shadow-2xl border-l border-slate-200/10 rounded-r-xl relative overflow-hidden">
-                                  {renderDigitalPage(spreadIndices[1])}
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        ) : (
-                          // 1-PAGE TABLET & MOBILE MODE
-                          <div className="w-full max-w-[380px] h-[460px] sm:h-[500px] max-h-[62vh] aspect-[3/4.2] shadow-2xl border border-slate-800/20 rounded-xl relative overflow-hidden shrink-0">
-                            {renderDigitalPage(viewerPage)}
-                          </div>
-                        )}
-                      </motion.div>
-                    </AnimatePresence>
-                  </div>
-                ) : null}
-
-                {/* Overlay Navigation Buttons on PC view (visible only on hover or when mouse is active) */}
-                {isDefaultBrochure && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePrevPage();
-                      }}
-                      disabled={viewerPage === 0}
-                      className="absolute left-6 w-11 h-11 rounded-full bg-slate-900/75 hover:bg-slate-800 text-white flex items-center justify-center border border-slate-700 hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed z-20"
-                    >
-                      <ChevronLeft className="w-6 h-6" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleNextPage();
-                      }}
-                      disabled={viewerPage === 5}
-                      className="absolute right-6 w-11 h-11 rounded-full bg-slate-900/75 hover:bg-slate-800 text-white flex items-center justify-center border border-slate-700 hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed z-20"
-                    >
-                      <ChevronRight className="w-6 h-6" />
-                    </button>
-                  </>
-                )}
-              </div>
-
-              {/* Bottom Controls and Indicators */}
-              <div className="bg-slate-900/90 border-t border-slate-800 p-3 sm:p-4 shrink-0 z-10 flex flex-row justify-between items-center gap-3">
-                {/* Page Number indicator */}
-                <div className="flex items-center space-x-3 sm:space-x-4">
-                  <div className="text-white text-[11px] sm:text-xs font-black font-mono tracking-widest bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700/50">
-                    {displayCurrentPage} <span className="text-slate-500 font-normal">/</span> <span className="text-slate-400">{displayTotal.toString().padStart(2, '0')}</span>
-                  </div>
-
-                  {/* Progress bar indicator */}
-                  <div className="w-16 sm:w-32 bg-slate-800/80 h-1 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-[#C5A059] transition-all duration-300 shadow-[0_0_8px_rgba(197,160,89,0.5)]"
-                      style={{ width: `${progressRatio * 100}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Zoom Board */}
-                <div className="flex items-center space-x-1 sm:space-x-2">
-                  <button
-                    onClick={handleZoomOut}
-                    disabled={viewerZoom <= 1.0}
-                    className="p-1.5 sm:p-2 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 disabled:opacity-30 cursor-pointer"
-                    title="축소"
-                  >
-                    <ZoomOut className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={handleResetZoom}
-                    disabled={viewerZoom === 1.0}
-                    className="p-1.5 sm:p-2 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 disabled:opacity-30 cursor-pointer"
-                    title="초기화"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={handleZoomIn}
-                    disabled={viewerZoom >= 2.5}
-                    className="p-1.5 sm:p-2 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 disabled:opacity-30 cursor-pointer"
-                    title="확대"
-                  >
-                    <ZoomIn className="w-4 h-4" />
-                  </button>
-                  <div className="text-[10px] text-slate-400 font-bold ml-1 w-8 text-right hidden sm:block">
-                    {Math.round(viewerZoom * 100)}%
-                  </div>
-                </div>
-              </div>
             </motion.div>
           );
         })()}
