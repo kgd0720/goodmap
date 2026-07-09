@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, startTransition } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowRight,
@@ -3295,11 +3295,15 @@ export default function App() {
   const handleAdminVerify = () => {
     const trimmedId = adminId.trim();
     if (trimmedId === "admin2026" && adminPassword === "admin2026") {
-      setIsAdminAuthenticated(true);
-      setAdminAuthError("");
+      startTransition(() => {
+        setIsAdminAuthenticated(true);
+        setAdminAuthError("");
+      });
     } else if (trimmedId === "admin" && (adminPassword === "2026" || adminPassword === "admin" || adminPassword === "1234")) {
-      setIsAdminAuthenticated(true);
-      setAdminAuthError("");
+      startTransition(() => {
+        setIsAdminAuthenticated(true);
+        setAdminAuthError("");
+      });
     } else {
       setAdminAuthError("아이디 또는 비밀번호가 일치하지 않습니다. 올바른 계정 정보를 입력해주세요.");
     }
